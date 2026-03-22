@@ -1,0 +1,89 @@
+MOST USED AND MOST SIMPLE 
+
+EK hi instance create kr skte ha 
+
+the implementation of this logic is called singleton design pattern 
+
+#include <iostream>
+using namespace std;
+
+class Singleton {
+private:
+    // Private constructor
+    Singleton() {
+        cout << "Singleton created!\n";
+    }
+
+    // Delete copy & assignment
+    Singleton(const Singleton&) = delete;
+    Singleton& operator=(const Singleton&) = delete;
+
+public:
+    // Single access point
+    static Singleton& getInstance() {
+        static Singleton instance;
+        return instance;
+    }
+
+    void sayHello() {
+        cout << "Hello from Singleton!\n";
+    }
+};
+
+int main() {
+    Singleton& s1 = Singleton::getInstance();
+    Singleton& s2 = Singleton::getInstance();
+
+    s1.sayHello();
+
+    cout << "Same object? " << (&s1 == &s2 ? "YES" : "NO") << endl;
+
+    return 0;
+}
+
+
+we can use double lock to make it thread safe or use eager initialization(use this when the object is light weight else a lot of memory is wasted to initialise it)
+
+
+#include <iostream>
+using namespace std;
+
+class Singleton {
+private:
+    // Instance created IMMEDIATELY at program start
+    static Singleton* instance;
+
+    // Private constructor
+    Singleton() {
+        cout << "Singleton created!\n";
+    }
+
+    Singleton(const Singleton&) = delete;
+    Singleton& operator=(const Singleton&) = delete;
+
+public:
+    // Just return the already-created instance
+    static Singleton* getInstance() {
+        return instance;
+    }
+
+    void sayHello() {
+        cout << "Hello from Singleton!\n";
+    }
+};
+
+// *** EAGER INIT — object banta hai BEFORE main() ***
+Singleton* Singleton::instance = new Singleton();
+
+int main() {
+    cout << "main() started\n\n";
+
+    Singleton* s1 = Singleton::getInstance();
+    Singleton* s2 = Singleton::getInstance();
+
+    s1->sayHello();
+
+    cout << "Same object? " << (s1 == s2 ? "YES" : "NO") << endl;
+
+    return 0;
+}

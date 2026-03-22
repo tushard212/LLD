@@ -1,0 +1,485 @@
+Factory Design Pattern (important)
+
+3 types of factory 
+
+1->simple factory (this is not a design pattern  , we can call it design principle )
+2->factory method 
+3->Abstract factory method
+
+SIMPLE Factory...(a factory class that decides which concrete class to instantiate)
+#include <iostream>
+#include <memory>
+#include <string>
+#include <cmath>
+using namespace std;
+
+// ─────────────────────────────────────────────
+// 1. Product Interface
+// ─────────────────────────────────────────────
+class Shape {
+public:
+    virtual ~Shape() = default;
+    virtual void draw() const = 0;
+    virtual double area() const = 0;
+};
+
+// ─────────────────────────────────────────────
+// 2. Concrete Products
+// ─────────────────────────────────────────────
+class Circle : public Shape {
+    double radius;
+public:
+    Circle(double r) : radius(r) {}
+    void draw() const override {
+        cout << "Drawing a Circle (radius = " << radius << ")\n";
+    }
+    double area() const override {
+        return M_PI * radius * radius;
+    }
+};
+
+class Rectangle : public Shape {
+    double width, height;
+public:
+    Rectangle(double w, double h) : width(w), height(h) {}
+    void draw() const override {
+        cout << "Drawing a Rectangle (" << width << " x " << height << ")\n";
+    }
+    double area() const override {
+        return width * height;
+    }
+};
+
+class Triangle : public Shape {
+    double base, height;
+public:
+    Triangle(double b, double h) : base(b), height(h) {}
+    void draw() const override {
+        cout << "Drawing a Triangle (base = " << base
+             << ", height = " << height << ")\n";
+    }
+    double area() const override {
+        return 0.5 * base * height;
+    }
+};
+
+// ─────────────────────────────────────────────
+// 3. Simple Factory
+// ─────────────────────────────────────────────
+class ShapeFactory {
+public:
+    // Single static method that creates objects based on a type string
+    static unique_ptr<Shape> createShape(const string& type) {
+        if (type == "circle")
+            return make_unique<Circle>(5.0);
+        else if (type == "rectangle")
+            return make_unique<Rectangle>(4.0, 6.0);
+        else if (type == "triangle")
+            return make_unique<Triangle>(3.0, 7.0);
+        else {
+            cout << "Unknown shape type: " << type << "\n";
+            return nullptr;
+        }
+    }
+};
+
+// ─────────────────────────────────────────────
+// 4. Client Code
+// ─────────────────────────────────────────────
+int main() {
+    cout << "=== Simple Factory Pattern Demo ===\n\n";
+
+    // Client never uses 'new' directly — delegates to the factory
+    auto shape1 = ShapeFactory::createShape("circle");
+    auto shape2 = ShapeFactory::createShape("rectangle");
+    auto shape3 = ShapeFactory::createShape("triangle");
+    auto shape4 = ShapeFactory::createShape("hexagon");  // unknown
+
+    for (const auto& shape : {shape1.get(), shape2.get(), shape3.get()}) {
+        if (shape) {
+            shape->draw();
+            cout << "  Area = " << shape->area() << "\n\n";
+        }
+    }
+
+    return 0;
+}
+
+
+
+
+
+
+FACTORY METHOD...(Defines an interface for creating objects but lets the subclasses to decide which class to instantiate)
+
+
+#include <iostream>
+#include <memory>
+#include <string>
+using namespace std;
+
+// ─────────────────────────────────────────────
+// 1. Product Interface
+// ─────────────────────────────────────────────
+class Transport {
+public:
+    virtual ~Transport() = default;
+    virtual void deliver() const = 0;
+    virtual double cost() const = 0;
+};
+
+// ─────────────────────────────────────────────
+// 2. Concrete Products
+// ─────────────────────────────────────────────
+class Truck : public Transport {
+public:
+    void deliver() const override {
+        cout << "  Delivering by TRUCK on road\n";
+    }
+    double cost() const override { return 100.0; }
+};
+
+class Ship : public Transport {
+public:
+    void deliver() const override {
+        cout << "  Delivering by SHIP across the sea\n";
+    }
+    double cost() const override { return 250.0; }
+};
+
+class Airplane : public Transport {
+public:
+    void deliver() const override {
+        cout << "  Delivering by AIRPLANE through the sky\n";
+    }
+    double cost() const override { return 500.0; }
+};
+
+// ─────────────────────────────────────────────
+// 3. Creator (Abstract)
+//    - Declares the factory method
+//    - Contains business logic that uses the product
+// ─────────────────────────────────────────────
+class Logistics {
+public:
+    virtual ~Logistics() = default;
+
+    // *** FACTORY METHOD — subclasses decide which product to create ***
+    virtual unique_ptr<Transport> createTransport() const = 0;
+
+    // Business logic that depends on the factory method
+    void planDelivery() const {
+        auto transport = createTransport();   // calls the factory method
+        cout << "  Planning delivery...\n";
+        transport->deliver();
+        cout << "  Delivery cost: $" << transport->cost() << "\n";
+    }
+};
+
+// ─────────────────────────────────────────────
+// 4. Concrete Creators
+//    - Each overrides the factory method to return
+//      a different concrete product
+// ─────────────────────────────────────────────
+class RoadLogistics : public Logistics {
+public:
+    unique_ptr<Transport> createTransport() const override {
+        return make_unique<Truck>();
+    }
+};
+
+class SeaLogistics : public Logistics {
+public:
+    unique_ptr<Transport> createTransport() const override {
+        return make_unique<Ship>();
+    }
+};
+
+class AirLogistics : public Logistics {
+public:
+    unique_ptr<Transport> createTransport() const override {
+        return make_unique<Airplane>();
+    }
+};
+
+// ─────────────────────────────────────────────
+// 5. Client Code
+//    - Works with creators through the base class
+//    - Never knows concrete classes directly
+// ─────────────────────────────────────────────
+void clientCode(const Logistics& logistics) {
+    logistics.planDelivery();
+}
+
+int main() {
+    cout << "=== Factory Method Pattern Demo ===\n\n";
+
+    cout << "--- Road Logistics ---\n";
+    RoadLogistics road;
+    clientCode(road);
+
+    cout << "\n--- Sea Logistics ---\n";
+    SeaLogistics sea;
+    clientCode(sea);
+
+    cout << "\n--- Air Logistics ---\n";
+    AirLogistics air;
+    clientCode(air);
+
+    return 0;
+}
+
+
+
+ABSTRACT FACTORY METHOD...(Provides a interface for creating families of related objects without specifying their concrete classes) 
+
+#include <iostream>
+#include <memory>
+#include <string>
+using namespace std;
+
+// ─────────────────────────────────────────────
+// 1. Abstract Product Interfaces
+//    - A family of related products
+// ─────────────────────────────────────────────
+class Button {
+public:
+    virtual ~Button() = default;
+    virtual void render() const = 0;
+    virtual void onClick() const = 0;
+};
+
+class Checkbox {
+public:
+    virtual ~Checkbox() = default;
+    virtual void render() const = 0;
+    virtual void toggle() const = 0;
+};
+
+class TextField {
+public:
+    virtual ~TextField() = default;
+    virtual void render() const = 0;
+    virtual void type(const string& text) const = 0;
+};
+
+// ─────────────────────────────────────────────
+// 2. Concrete Products — Windows Family
+// ─────────────────────────────────────────────
+class WindowsButton : public Button {
+public:
+    void render() const override {
+        cout << "    [Windows Button] rendered with Win32 API\n";
+    }
+    void onClick() const override {
+        cout << "    [Windows Button] clicked!\n";
+    }
+};
+
+class WindowsCheckbox : public Checkbox {
+public:
+    void render() const override {
+        cout << "    [Windows Checkbox] rendered with Win32 API\n";
+    }
+    void toggle() const override {
+        cout << "    [Windows Checkbox] toggled!\n";
+    }
+};
+
+class WindowsTextField : public TextField {
+public:
+    void render() const override {
+        cout << "    [Windows TextField] rendered with Win32 API\n";
+    }
+    void type(const string& text) const override {
+        cout << "    [Windows TextField] typed: " << text << "\n";
+    }
+};
+
+// ─────────────────────────────────────────────
+// 3. Concrete Products — macOS Family
+// ─────────────────────────────────────────────
+class MacButton : public Button {
+public:
+    void render() const override {
+        cout << "    [Mac Button] rendered with Cocoa API\n";
+    }
+    void onClick() const override {
+        cout << "    [Mac Button] clicked!\n";
+    }
+};
+
+class MacCheckbox : public Checkbox {
+public:
+    void render() const override {
+        cout << "    [Mac Checkbox] rendered with Cocoa API\n";
+    }
+    void toggle() const override {
+        cout << "    [Mac Checkbox] toggled!\n";
+    }
+};
+
+class MacTextField : public TextField {
+public:
+    void render() const override {
+        cout << "    [Mac TextField] rendered with Cocoa API\n";
+    }
+    void type(const string& text) const override {
+        cout << "    [Mac TextField] typed: " << text << "\n";
+    }
+};
+
+// ─────────────────────────────────────────────
+// 4. Concrete Products — Linux Family
+// ─────────────────────────────────────────────
+class LinuxButton : public Button {
+public:
+    void render() const override {
+        cout << "    [Linux Button] rendered with GTK\n";
+    }
+    void onClick() const override {
+        cout << "    [Linux Button] clicked!\n";
+    }
+};
+
+class LinuxCheckbox : public Checkbox {
+public:
+    void render() const override {
+        cout << "    [Linux Checkbox] rendered with GTK\n";
+    }
+    void toggle() const override {
+        cout << "    [Linux Checkbox] toggled!\n";
+    }
+};
+
+class LinuxTextField : public TextField {
+public:
+    void render() const override {
+        cout << "    [Linux TextField] rendered with GTK\n";
+    }
+    void type(const string& text) const override {
+        cout << "    [Linux TextField] typed: " << text << "\n";
+    }
+};
+
+// ─────────────────────────────────────────────
+// 5. Abstract Factory Interface
+//    - Declares creation methods for EACH product
+//      in the family
+// ─────────────────────────────────────────────
+class UIFactory {
+public:
+    virtual ~UIFactory() = default;
+    virtual unique_ptr<Button>    createButton()    const = 0;
+    virtual unique_ptr<Checkbox>  createCheckbox()  const = 0;
+    virtual unique_ptr<TextField> createTextField() const = 0;
+};
+
+// ─────────────────────────────────────────────
+// 6. Concrete Factories
+//    - Each factory produces an entire family
+//      of compatible products
+// ─────────────────────────────────────────────
+class WindowsFactory : public UIFactory {
+public:
+    unique_ptr<Button> createButton() const override {
+        return make_unique<WindowsButton>();
+    }
+    unique_ptr<Checkbox> createCheckbox() const override {
+        return make_unique<WindowsCheckbox>();
+    }
+    unique_ptr<TextField> createTextField() const override {
+        return make_unique<WindowsTextField>();
+    }
+};
+
+class MacFactory : public UIFactory {
+public:
+    unique_ptr<Button> createButton() const override {
+        return make_unique<MacButton>();
+    }
+    unique_ptr<Checkbox> createCheckbox() const override {
+        return make_unique<MacCheckbox>();
+    }
+    unique_ptr<TextField> createTextField() const override {
+        return make_unique<MacTextField>();
+    }
+};
+
+class LinuxFactory : public UIFactory {
+public:
+    unique_ptr<Button> createButton() const override {
+        return make_unique<LinuxButton>();
+    }
+    unique_ptr<Checkbox> createCheckbox() const override {
+        return make_unique<LinuxCheckbox>();
+    }
+    unique_ptr<TextField> createTextField() const override {
+        return make_unique<LinuxTextField>();
+    }
+};
+
+// ─────────────────────────────────────────────
+// 7. Application (Client)
+//    - Works ONLY with abstract interfaces
+//    - Never knows concrete product classes
+// ─────────────────────────────────────────────
+class Application {
+    unique_ptr<Button>    button;
+    unique_ptr<Checkbox>  checkbox;
+    unique_ptr<TextField> textField;
+
+public:
+    // Receives any factory — Windows, Mac, or Linux
+    Application(const UIFactory& factory) {
+        button    = factory.createButton();
+        checkbox  = factory.createCheckbox();
+        textField = factory.createTextField();
+    }
+
+    void renderUI() const {
+        cout << "  Rendering UI:\n";
+        button->render();
+        checkbox->render();
+        textField->render();
+    }
+
+    void interact() const {
+        cout << "  Interacting:\n";
+        button->onClick();
+        checkbox->toggle();
+        textField->type("Hello, World!");
+    }
+};
+
+// ─────────────────────────────────────────────
+// 8. Factory Selector (optional helper)
+// ─────────────────────────────────────────────
+unique_ptr<UIFactory> getFactory(const string& os) {
+    if (os == "windows") return make_unique<WindowsFactory>();
+    if (os == "mac")     return make_unique<MacFactory>();
+    if (os == "linux")   return make_unique<LinuxFactory>();
+    throw runtime_error("Unknown OS: " + os);
+}
+
+// ─────────────────────────────────────────────
+// 9. Main
+// ─────────────────────────────────────────────
+int main() {
+    cout << "=== Abstract Factory Pattern Demo ===\n\n";
+
+    // Simulate different platforms
+    for (const string& os : {"windows", "mac", "linux"}) {
+        cout << "--- Platform: " << os << " ---\n";
+
+        auto factory = getFactory(os);
+        Application app(*factory);
+
+        app.renderUI();
+        app.interact();
+        cout << "\n";
+    }
+
+    return 0;
+}
+

@@ -1,0 +1,113 @@
+Strategy pattern says inheritence is not good 
+
+
+Problems using inheritence
+1-> code non reusability 
+2->to add a new feature a lot of changes were required 
+3-> breaking open closed principle 
+
+solution of inheritence is not more inheritence.
+composition should be favoured over inheritence.
+
+
+THE PRINCIPLE DEFINES A FAMILY OF ALGORITHM AND SUGGESTS THAT WE PUT THE CHANGING ONES SEPARATED FROM THE CONSTANT ONES SO IT CAN BE CHANGED AS PER NEEDED DURING RUNTIME 
+
+#include <iostream>
+#include <memory>
+#include <string>
+using namespace std;
+
+// ─────────────────────────────────────────────
+// 1. Strategy Interface
+// ─────────────────────────────────────────────
+class PaymentStrategy {
+public:
+    virtual ~PaymentStrategy() = default;
+    virtual void pay(double amount) const = 0;
+};
+
+// ─────────────────────────────────────────────
+// 2. Concrete Strategies
+// ─────────────────────────────────────────────
+class CreditCardPayment : public PaymentStrategy {
+    string cardNumber;
+public:
+    CreditCardPayment(const string& card) : cardNumber(card) {}
+    void pay(double amount) const override {
+        cout << "Paid $" << amount
+             << " using Credit Card ending in "
+             << cardNumber.substr(cardNumber.size() - 4) << "\n";
+    }
+};
+
+class PayPalPayment : public PaymentStrategy {
+    string email;
+public:
+    PayPalPayment(const string& email) : email(email) {}
+    void pay(double amount) const override {
+        cout << "Paid $" << amount
+             << " using PayPal account " << email << "\n";
+    }
+};
+
+class CryptoPayment : public PaymentStrategy {
+    string walletAddress;
+public:
+    CryptoPayment(const string& wallet) : walletAddress(wallet) {}
+    void pay(double amount) const override {
+        cout << "Paid $" << amount
+             << " using Crypto wallet " << walletAddress << "\n";
+    }
+};
+
+// ─────────────────────────────────────────────
+// 3. Context
+// ─────────────────────────────────────────────
+class ShoppingCart {
+    double total = 0;
+    unique_ptr<PaymentStrategy> strategy;
+public:
+    void addItem(double price) {
+        total += price;
+    }
+
+    void setPaymentStrategy(unique_ptr<PaymentStrategy> s) {
+        strategy = std::move(s);
+    }
+
+    void checkout() const {
+        if (!strategy) {
+            cout << "No payment method set!\n";
+            return;
+        }
+        strategy->pay(total);
+    }
+};
+
+// ─────────────────────────────────────────────
+// 4. Client Code
+// ─────────────────────────────────────────────
+int main() {
+    ShoppingCart cart;
+    cart.addItem(49.99);
+    cart.addItem(25.50);
+
+    cout << "=== Strategy Design Pattern Demo ===\n\n";
+
+    // Strategy 1: Pay with Credit Card
+    cart.setPaymentStrategy(
+        make_unique<CreditCardPayment>("1234567890123456"));
+    cart.checkout();
+
+    // Strategy 2: Pay with PayPal
+    cart.setPaymentStrategy(
+        make_unique<PayPalPayment>("user@example.com"));
+    cart.checkout();
+
+    // Strategy 3: Pay with Crypto
+    cart.setPaymentStrategy(
+        make_unique<CryptoPayment>("0xABC123DEF456"));
+    cart.checkout();
+
+    return 0;
+}
