@@ -1,8 +1,8 @@
-MOST USED AND MOST SIMPLE 
+MOST USED AND MOST SIMPLE
 
-EK hi instance create kr skte ha 
+EK hi instance create kr skte ha
 
-the implementation of this logic is called singleton design pattern 
+the implementation of this logic is called singleton design pattern
 
 #include <iostream>
 using namespace std;
@@ -87,3 +87,9 @@ int main() {
 
     return 0;
 }
+
+REAl WORLD USAGES
+1.logging system
+2.database connection
+3.configuration manager
+
