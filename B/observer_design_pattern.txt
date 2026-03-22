@@ -1,0 +1,114 @@
+giObserver Design Pattern
+
+Why it was needed
+- Problem: When one object (the subject) changes state, many other objects (observers) need to be notified and updated. Without a pattern, the subject would need direct knowledge of concrete observer classes, causing tight coupling and poor maintainability.
+- Need: Decouple the subject from its observers so observers can be added/removed at runtime with minimal changes.
+
+What problem it solves
+- Implements a one-to-many dependency between objects so that when one object changes state, all its dependents are notified and updated automatically.
+
+How it solves the problem (concept)
+- Define an `Observer` interface with an `update()` method.
+- Define a `Subject` that keeps a list of `Observer` references and exposes `attach()`, `detach()`, and `notify()` methods.
+- Concrete observers implement `update()` and register themselves with the subject. When subject state changes it calls `notify()` which calls `update()` on each observer.
+
+C++ Example (simple, self-contained)
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <memory>
+
+// Observer interface
+struct Observer {
+    virtual ~Observer() = default;
+    virtual void update(int newState) = 0;
+};
+
+// Subject base
+class Subject {
+public:
+    void attach(std::shared_ptr<Observer> obs) { observers.push_back(obs); }
+    void detach(std::shared_ptr<Observer> obs) {
+        observers.erase(std::remove(observers.begin(), observers.end(), obs), observers.end());
+    }
+protected:
+    void notify(int state) {
+        for (auto &w : observers) {
+            if (auto obs = w.lock()) {
+                obs->update(state);
+            }
+        }
+    }
+private:
+    std::vector<std::weak_ptr<Observer>> observers;
+};
+
+// Concrete subject
+class ConcreteSubject : public Subject {
+public:
+    void setState(int s) {
+        state = s;
+        notify(state);
+    }
+    int getState() const { return state; }
+private:
+    int state{0};
+};
+
+// Concrete observer
+class ConcreteObserver : public Observer, public std::enable_shared_from_this<ConcreteObserver> {
+public:
+    ConcreteObserver(const std::string &n, std::shared_ptr<ConcreteSubject> s)
+        : name(n), subject(s) {}
+    void subscribe() {
+        subject->attach(shared_from_this());
+    }
+    void unsubscribe() {
+        subject->detach(shared_from_this());
+    }
+    void update(int newState) override {
+        std::cout << name << " received state: " << newState << '\n';
+    }
+private:
+    std::string name;
+    std::shared_ptr<ConcreteSubject> subject;
+};
+
+int main() {
+    auto subject = std::make_shared<ConcreteSubject>();
+
+    auto o1 = std::make_shared<ConcreteObserver>("ObserverA", subject);
+    auto o2 = std::make_shared<ConcreteObserver>("ObserverB", subject);
+
+    o1->subscribe();
+    o2->subscribe();
+
+    subject->setState(10); // both observers get notified
+
+    o2->unsubscribe();
+
+    subject->setState(20); // only ObserverA gets notified
+
+    return 0;
+}
+```
+
+Notes about the example
+- Uses `std::weak_ptr` in the subject to avoid strong reference cycles and allow observers to be destroyed safely.
+- `enable_shared_from_this` allows an observer to get a `shared_ptr` to itself when attaching.
+
+Advantages
+- Loose coupling: subject and observers interact through interfaces, not concrete classes.
+- Dynamic: observers can be added/removed at runtime.
+- Broadcast communication: one-to-many updates are simple to implement.
+
+Disadvantages / Caveats
+- Notification order and timing can be unclear; observers may depend on update order.
+- Can cause performance issues if many observers are notified frequently.
+- Potential for memory leaks or dangling pointers if ownership is not managed correctly—use smart pointers (or careful manual management) in C++.
+- Harder to reason about in multi-threaded contexts — requires synchronization.
+
+When to use
+- Use when you need a clean one-to-many dependency and want to decouple the subject from its observers (e.g., UI event systems, publish/subscribe, model-view updates).
