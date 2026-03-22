@@ -112,3 +112,144 @@ Disadvantages / Caveats
 
 When to use
 - Use when you need a clean one-to-many dependency and want to decouple the subject from its observers (e.g., UI event systems, publish/subscribe, model-view updates).
+
+
+================================================================================
+YouTube Example — IChannel / ISubscriber
+================================================================================
+
+- `ISubscriber` interface  → only `update()` method
+- `IChannel` interface     → `subscribe()`, `unsubscribe()`, `notify()` methods
+- `YouTubeChannel` (concrete) implements `IChannel`, holds a list of `ISubscriber*`
+- `Subscriber` (concrete) implements `ISubscriber`, holds a reference to `YouTubeChannel`
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <string>
+#include <algorithm>
+
+// ──────────────────────────────────────
+// Interface: ISubscriber  (Observer role)
+// ──────────────────────────────────────
+class ISubscriber {
+public:
+    virtual ~ISubscriber() = default;
+    virtual void update(const std::string& videoTitle) = 0;   // only method
+};
+
+// ──────────────────────────────────────
+// Interface: IChannel  (Subject role)
+// ──────────────────────────────────────
+class IChannel {
+public:
+    virtual ~IChannel() = default;
+    virtual void subscribe(ISubscriber* sub)   = 0;
+    virtual void unsubscribe(ISubscriber* sub) = 0;
+    virtual void notify(const std::string& videoTitle) = 0;
+};
+
+// ──────────────────────────────────────
+// Concrete Subject: YouTubeChannel
+//   implements IChannel
+// ──────────────────────────────────────
+class YouTubeChannel : public IChannel {
+public:
+    YouTubeChannel(const std::string& name) : channelName(name) {}
+
+    void subscribe(ISubscriber* sub) override {
+        subscribers.push_back(sub);
+        std::cout << "[" << channelName << "] New subscriber added.\n";
+    }
+
+    void unsubscribe(ISubscriber* sub) override {
+        subscribers.erase(
+            std::remove(subscribers.begin(), subscribers.end(), sub),
+            subscribers.end()
+        );
+        std::cout << "[" << channelName << "] Subscriber removed.\n";
+    }
+
+    void notify(const std::string& videoTitle) override {
+        for (auto* sub : subscribers) {
+            sub->update(videoTitle);
+        }
+    }
+
+    // channel-specific behaviour
+    void uploadVideo(const std::string& title) {
+        std::cout << "\n[" << channelName << "] Uploaded: \"" << title << "\"\n";
+        notify(title);          // notify all subscribers
+    }
+
+private:
+    std::string channelName;
+    std::vector<ISubscriber*> subscribers;
+};
+
+// ──────────────────────────────────────
+// Concrete Observer: Subscriber
+//   implements ISubscriber
+//   has-a relationship with YouTubeChannel
+// ──────────────────────────────────────
+class Subscriber : public ISubscriber {
+public:
+    Subscriber(const std::string& name, YouTubeChannel& ch)
+        : subscriberName(name), channel(ch) {}
+
+    // convenience helpers that delegate to the channel
+    void subscribeTo()     { channel.subscribe(this); }
+    void unsubscribeFrom() { channel.unsubscribe(this); }
+
+    // ISubscriber — only method
+    void update(const std::string& videoTitle) override {
+        std::cout << "  >> " << subscriberName
+                  << " got notified: \"" << videoTitle << "\"\n";
+    }
+
+private:
+    std::string subscriberName;
+    YouTubeChannel& channel;       // relationship with the channel
+};
+
+// ──────────────────────────────────────
+// main — demo
+// ──────────────────────────────────────
+int main() {
+    YouTubeChannel techChannel("TechWithTim");
+
+    Subscriber alice("Alice", techChannel);
+    Subscriber bob("Bob",     techChannel);
+    Subscriber carol("Carol", techChannel);
+
+    alice.subscribeTo();
+    bob.subscribeTo();
+    carol.subscribeTo();
+
+    techChannel.uploadVideo("Observer Pattern Explained");
+    // All three get notified
+
+    bob.unsubscribeFrom();
+
+    techChannel.uploadVideo("Factory Pattern Explained");
+    // Only Alice and Carol get notified
+
+    return 0;
+}
+```
+
+Expected output:
+    [TechWithTim] New subscriber added.
+    [TechWithTim] New subscriber added.
+    [TechWithTim] New subscriber added.
+
+    [TechWithTim] Uploaded: "Observer Pattern Explained"
+      >> Alice got notified: "Observer Pattern Explained"
+      >> Bob got notified: "Observer Pattern Explained"
+      >> Carol got notified: "Observer Pattern Explained"
+
+    [TechWithTim] Subscriber removed.
+
+    [TechWithTim] Uploaded: "Factory Pattern Explained"
+      >> Alice got notified: "Factory Pattern Explained"
+      >> Carol got notified: "Factory Pattern Explained"
