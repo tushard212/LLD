@@ -1,0 +1,203 @@
+Decorator Design Pattern
+
+Why it was needed
+- Problem: When you need to add new responsibilities/features to objects dynamically at runtime, inheritance becomes inflexible. Creating subclasses for every combination of features (e.g., Mario + Fire + Shield + Speed) leads to combinatorial explosion.
+- Need: A way to wrap objects with additional behaviors without modifying their structure or creating excessive subclasses.
+
+What problem it solves
+- Attaches additional responsibilities to an object dynamically, providing a flexible alternative to subclassing for extending functionality.
+
+How it solves the problem
+- Define a common interface for both the original object and decorator wrappers.
+- Create concrete decorators that wrap the original object and add new behavior while delegating to the wrapped object.
+- Decorators can be stacked/chained — each adds one feature without knowing about others.
+
+C++ Example — Mario Power-ups (Decorator Pattern)
+
+```cpp
+#include <iostream>
+#include <string>
+#include <memory>
+
+// ──────────────────────────────────────
+// Component Interface: IMario
+// ──────────────────────────────────────
+class IMario {
+public:
+    virtual ~IMario() = default;
+    virtual void display() = 0;
+    virtual int getSpeed() = 0;
+    virtual int getPower() = 0;
+};
+
+// ──────────────────────────────────────
+// Concrete Component: Mario (base)
+// ──────────────────────────────────────
+class Mario : public IMario {
+public:
+    void display() override {
+        std::cout << "[ MARIO ]";
+    }
+    int getSpeed() override { return 5; }
+    int getPower() override { return 1; }
+};
+
+// ──────────────────────────────────────
+// Abstract Decorator: MarioDecorator
+// ──────────────────────────────────────
+class MarioDecorator : public IMario {
+protected:
+    std::shared_ptr<IMario> mario;
+
+public:
+    MarioDecorator(std::shared_ptr<IMario> m) : mario(m) {}
+
+    void display() override {
+        mario->display();
+    }
+    int getSpeed() override { return mario->getSpeed(); }
+    int getPower() override { return mario->getPower(); }
+};
+
+// ──────────────────────────────────────
+// Concrete Decorator: FireMario
+// ──────────────────────────────────────
+class FireMario : public MarioDecorator {
+public:
+    FireMario(std::shared_ptr<IMario> m) : MarioDecorator(m) {}
+
+    void display() override {
+        MarioDecorator::display();
+        std::cout << " + FIRE";
+    }
+    int getPower() override { return MarioDecorator::getPower() + 10; }
+};
+
+// ──────────────────────────────────────
+// Concrete Decorator: IceMario
+// ──────────────────────────────────────
+class IceMario : public MarioDecorator {
+public:
+    IceMario(std::shared_ptr<IMario> m) : MarioDecorator(m) {}
+
+    void display() override {
+        MarioDecorator::display();
+        std::cout << " + ICE";
+    }
+    int getPower() override { return MarioDecorator::getPower() + 8; }
+};
+
+// ──────────────────────────────────────
+// Concrete Decorator: SuperMario
+// ──────────────────────────────────────
+class SuperMario : public MarioDecorator {
+public:
+    SuperMario(std::shared_ptr<IMario> m) : MarioDecorator(m) {}
+
+    void display() override {
+        MarioDecorator::display();
+        std::cout << " + SIZE_UP";
+    }
+    int getSpeed() override { return MarioDecorator::getSpeed() + 2; }
+};
+
+// ──────────────────────────────────────
+// Concrete Decorator: ShieldMario
+// ──────────────────────────────────────
+class ShieldMario : public MarioDecorator {
+public:
+    ShieldMario(std::shared_ptr<IMario> m) : MarioDecorator(m) {}
+
+    void display() override {
+        MarioDecorator::display();
+        std::cout << " + SHIELD";
+    }
+    int getPower() override { return MarioDecorator::getPower() + 5; }
+};
+
+// ──────────────────────────────────────
+// main — demo
+// ──────────────────────────────────────
+int main() {
+    std::cout << "=== Decorator Pattern Example: Mario Power-ups ===\n\n";
+
+    // Basic Mario
+    auto mario = std::make_shared<Mario>();
+    std::cout << "1. Basic Mario:\n   ";
+    mario->display();
+    std::cout << "\n   Speed: " << mario->getSpeed() << ", Power: " << mario->getPower() << "\n\n";
+
+    // Mario + Fire
+    auto fireMario = std::make_shared<FireMario>(mario);
+    std::cout << "2. Mario + Fire:\n   ";
+    fireMario->display();
+    std::cout << "\n   Speed: " << fireMario->getSpeed() << ", Power: " << fireMario->getPower() << "\n\n";
+
+    // Mario + Fire + Size Up
+    auto superFireMario = std::make_shared<SuperMario>(fireMario);
+    std::cout << "3. Mario + Fire + Size Up:\n   ";
+    superFireMario->display();
+    std::cout << "\n   Speed: " << superFireMario->getSpeed() << ", Power: " << superFireMario->getPower() << "\n\n";
+
+    // Mario + Fire + Size Up + Shield
+    auto protectedMario = std::make_shared<ShieldMario>(superFireMario);
+    std::cout << "4. Mario + Fire + Size Up + Shield:\n   ";
+    protectedMario->display();
+    std::cout << "\n   Speed: " << protectedMario->getSpeed() << ", Power: " << protectedMario->getPower() << "\n\n";
+
+    // Different combination: Mario + Ice + Shield
+    auto iceMario = std::make_shared<IceMario>(mario);
+    auto iceShieldMario = std::make_shared<ShieldMario>(iceMario);
+    std::cout << "5. Mario + Ice + Shield:\n   ";
+    iceShieldMario->display();
+    std::cout << "\n   Speed: " << iceShieldMario->getSpeed() << ", Power: " << iceShieldMario->getPower() << "\n\n";
+
+    return 0;
+}
+```
+
+Expected output:
+    === Decorator Pattern Example: Mario Power-ups ===
+
+    1. Basic Mario:
+       [ MARIO ]
+       Speed: 5, Power: 1
+
+    2. Mario + Fire:
+       [ MARIO ] + FIRE
+       Speed: 5, Power: 11
+
+    3. Mario + Fire + Size Up:
+       [ MARIO ] + FIRE + SIZE_UP
+       Speed: 7, Power: 11
+
+    4. Mario + Fire + Size Up + Shield:
+       [ MARIO ] + FIRE + SIZE_UP + SHIELD
+       Speed: 7, Power: 16
+
+    5. Mario + Ice + Shield:
+       [ MARIO ] + ICE + SHIELD
+       Speed: 5, Power: 14
+
+Key points about the example
+- **Component** (`IMario`) — the interface that both the original and decorators implement.
+- **Concrete Component** (`Mario`) — the basic object.
+- **Abstract Decorator** (`MarioDecorator`) — holds a reference to the component and delegates calls.
+- **Concrete Decorators** (`FireMario`, `IceMario`, `SuperMario`, `ShieldMario`) — each adds one feature.
+- **Stacking** — decorators wrap each other, building complex behaviors from simple ones.
+
+Advantages
+- Open/Closed Principle: Add new features without modifying existing classes.
+- Single Responsibility: Each decorator handles one concern (fire, ice, shield, etc.).
+- Flexible composition: Combine decorators at runtime in any order.
+- Avoids subclass explosion: Instead of Mario, FireMario, IceMario, FireIceMario, etc., use decoration.
+
+Disadvantages
+- Complexity: Can be harder to understand and debug with many decorator layers.
+- Order matters: The order of decoration can affect behavior (though usually not critically).
+- Extra objects: Each decorator wraps the previous one, creating a chain in memory.
+
+When to use
+- Use when you need to add responsibilities to objects dynamically and unpredictably.
+- Use when subclassing would create too many classes.
+- Use in frameworks where features should be composable (UI components, middleware, etc.).
