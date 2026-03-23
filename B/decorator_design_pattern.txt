@@ -201,3 +201,5 @@ When to use
 - Use when you need to add responsibilities to objects dynamically and unpredictably.
 - Use when subclassing would create too many classes.
 - Use in frameworks where features should be composable (UI components, middleware, etc.).
+
+.
