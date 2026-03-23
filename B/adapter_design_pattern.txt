@@ -1,0 +1,565 @@
+================================================================================
+                      ADAPTER DESIGN PATTERN
+================================================================================
+
+1. WHAT IS ADAPTER DESIGN PATTERN?
+================================================================================
+The Adapter Design Pattern (also called Wrapper) converts the interface of a
+class into another interface clients expect. It allows classes with incompatible
+interfaces to work together.
+
+Think of it like a power adapter:
+  - US device (110V, 2-pin plug)
+  - European outlet (230V, 2-round-pin socket)
+  - Adapter converts one interface to another ✓
+
+Components:
+- Target: Interface that client expects to use
+- Adapter: Implements Target interface and wraps Adaptee
+- Adaptee: Existing class with incompatible interface
+- Client: Uses Adapter to interact with Adaptee
+
+================================================================================
+2. WHY WAS IT NEEDED?
+================================================================================
+Problems it solves:
+
+1. INCOMPATIBLE INTERFACES
+   - You have a working library/service but its interface doesn't match what
+     your client expects
+   - You can't modify the existing library (third-party, legacy code)
+
+2. LEGACY CODE INTEGRATION
+   - Old system (XML) needs to work with new system (JSON)
+   - Can't rewrite existing code
+   - Need incremental migration
+
+3. THIRD-PARTY LIBRARY MISMATCH
+   - Library provides data in one format (XML)
+   - Your application expects another format (JSON)
+   - Example: Weather API returns XML, app expects JSON
+
+4. REUSABILITY WITHOUT MODIFICATION
+   - Want to reuse existing components without changing them
+   - Follows Open/Closed Principle
+
+Example Problem (without Adapter):
+```
+// Client expects JSON
+class ReportGenerator {
+    void generateReport(JSONData data) { ... }
+};
+
+// Third-party library only provides XML
+class WeatherLibrary {
+    XMLData fetchWeatherData() { ... }
+};
+
+// Direct usage fails!
+ReportGenerator gen;
+XMLData xmlData = WeatherLibrary::fetchWeatherData();
+gen.generateReport(xmlData);  // COMPILE ERROR! XMLData != JSONData
+```
+
+With Adapter:
+```
+// Create adapter that converts XML → JSON
+class XmlToJsonAdapter implements JSONData {
+    private XMLData xmlData;
+
+    JSONData convert() {
+        // Convert XML to JSON
+        return convertToJson(xmlData);
+    }
+};
+
+// Now it works!
+XMLData xmlData = WeatherLibrary::fetchWeatherData();
+XmlToJsonAdapter adapter(xmlData);
+gen.generateReport(adapter.convert());  // Success!
+```
+
+================================================================================
+3. ADVANTAGES AND DISADVANTAGES
+================================================================================
+
+ADVANTAGES:
+===========
+✓ Decoupling: Client doesn't need to know about Adaptee's actual interface
+  - No modification needed to client code
+
+✓ Reusability: Reuse incompatible components without changing them
+  - Useful for legacy code and third-party libraries
+
+✓ Single Responsibility: Adapter handles only interface conversion
+  - Keeps concern separate and focused
+
+✓ Open/Closed Principle: Add new adapters without modifying existing code
+  - Easy to support multiple formats (XML, JSON, CSV, etc)
+
+✓ Flexibility: Can swap adapters at runtime
+  - Different data sources, different adapters
+
+✓ No Source Code Access Needed: Works with closed-source libraries
+  - Third-party binaries can be adapted
+
+
+DISADVANTAGES:
+==============
+✗ Extra Complexity: Additional classes and layers of indirection
+  - More classes to understand and maintain
+
+✗ Performance Overhead: Conversion adds processing time
+  - Extra method calls and data transformation
+
+✗ Memory Usage: Adapter may need to store original and converted data
+  - Can consume extra memory for large datasets
+
+✗ Code Duplication: Multiple adapters for different formats = repetitive code
+  - DRY principle might be violated
+
+✗ Debugging Difficulty: Harder to trace errors across layers
+  - Interface mismatch errors harder to spot
+
+✗ Over-engineering: For simple cases, adapter might be overkill
+  - Simple conversion function might suffice
+
+================================================================================
+4. CLASS FLOW / ARCHITECTURE
+================================================================================
+
+        ┌──────────────────────────────┐
+        │      Client Code             │
+        │   (expects JSON interface)   │
+        └─────────────────┬────────────┘
+                          │
+                          │ uses
+                          ▼
+        ┌──────────────────────────────┐
+        │    <<Interface>>             │
+        │     JSONData                 │
+        ├──────────────────────────────┤
+        │ + getJsonString()            │
+        │ + parseJson()                │
+        └──────────────────┬───────────┘
+                          △
+        ┌─────────────────┴──────────────────────┐
+        │                                        │
+   ┌────────────────────┐          ┌────────────────────────────┐
+   │  ConcreteJson      │          │   XmlToJsonAdapter         │
+   │   (implements)     │          │     (adapter)              │
+   ├────────────────────┤          ├────────────────────────────┤
+   │ - data: string     │          │ - xmlData (adaptee)        │
+   │ + getJsonString()  │          │ + XmlToJsonAdapter(xml)    │
+   │ + parseJson()      │          │ + getJsonString()  ◄─ wraps
+   └────────────────────┘          │ + parseJson()       & converts
+                                   └────────────────┬───────────┘
+                                                    │
+                                                    │ delegates to
+                                                    ▼
+                        ┌──────────────────────────────────┐
+                        │  Adaptee (Third-Party Library)   │
+                        │      XMLData                     │
+                        ├──────────────────────────────────┤
+                        │ - xmlContent: string             │
+                        │ + getXmlString()                 │
+                        │ + parseXml()                     │
+                        │ + addElement(tag, value)         │
+                        └──────────────────────────────────┘
+
+Flow:
+====
+1. Client needs JSONData interface
+2. Client calls JSONData methods (getJsonString, parseJson)
+3. Adapter implements JSONData interface
+4. Adapter wraps XMLData (adaptee)
+5. When JSONData method is called → Adapter converts XML → JSON
+6. Returns result in expected JSON format
+7. Client uses data without knowing about XMLData
+
+================================================================================
+5. COMPLETE C++ EXAMPLE: JSON CLIENT WITH XML ADAPTER
+================================================================================
+
+#include <iostream>
+#include <string>
+#include <map>
+#include <sstream>
+#include <memory>
+using namespace std;
+
+// ============= ADAPTEE: THIRD-PARTY XMLDATA =============
+
+// This is from a third-party library - we can't modify it!
+class XMLData {
+private:
+    string xmlContent;
+    map<string, string> xmlElements;
+
+public:
+    XMLData() {
+        // Sample XML data from third-party library
+        xmlContent = R"(
+            <report>
+                <weather>
+                    <city>New York</city>
+                    <temperature>72</temperature>
+                    <humidity>65</humidity>
+                    <condition>Sunny</condition>
+                </weather>
+            </report>
+        )";
+
+        // Sample parsed elements for demonstration
+        xmlElements["city"] = "New York";
+        xmlElements["temperature"] = "72";
+        xmlElements["humidity"] = "65";
+        xmlElements["condition"] = "Sunny";
+    }
+
+    // Adaptee's interface - DIFFERENT from what Client expects!
+    string getXmlString() const {
+        return xmlContent;
+    }
+
+    string getXmlElement(const string& tag) const {
+        auto it = xmlElements.find(tag);
+        return it != xmlElements.end() ? it->second : "";
+    }
+
+    void printXmlData() const {
+        cout << "XML Data:" << xmlContent << endl;
+    }
+
+    map<string, string> getAllElements() const {
+        return xmlElements;
+    }
+};
+
+// ============= TARGET INTERFACE: CLIENT EXPECTS JSON =============
+
+// This is what the client expects to work with
+class JSONData {
+public:
+    virtual ~JSONData() {}
+
+    // Target interface methods
+    virtual string getJsonString() const = 0;
+
+    virtual string getJsonField(const string& field) const = 0;
+
+    virtual map<string, string> getAllFields() const = 0;
+
+    virtual void printJsonData() const = 0;
+};
+
+// ============= CONCRETE JSON DATA =============
+
+class ConcreteJsonData : public JSONData {
+private:
+    map<string, string> jsonFields;
+
+public:
+    ConcreteJsonData() {
+        // Native JSON data
+        jsonFields["city"] = "London";
+        jsonFields["temperature"] = "68";
+        jsonFields["humidity"] = "70";
+        jsonFields["condition"] = "Cloudy";
+    }
+
+    string getJsonString() const override {
+        stringstream ss;
+        ss << "{\n";
+        int count = 0;
+        for (const auto& pair : jsonFields) {
+            ss << "  \"" << pair.first << "\": \"" << pair.second << "\"";
+            if (++count < jsonFields.size()) ss << ",";
+            ss << "\n";
+        }
+        ss << "}";
+        return ss.str();
+    }
+
+    string getJsonField(const string& field) const override {
+        auto it = jsonFields.find(field);
+        return it != jsonFields.end() ? it->second : "null";
+    }
+
+    map<string, string> getAllFields() const override {
+        return jsonFields;
+    }
+
+    void printJsonData() const override {
+        cout << "JSON Data:\n" << getJsonString() << endl;
+    }
+};
+
+// ============= ADAPTER: XMLTOJSON CONVERTER =============
+
+// This adapter converts XMLData (adaptee) to JSONData (target interface)
+class XmlToJsonAdapter : public JSONData {
+private:
+    XMLData* xmlData;  // Reference to adaptee
+    mutable string cachedJson;
+    mutable bool jsonCached = false;
+
+    // Helper function to convert XML to JSON format
+    string convertXmlToJson(const XMLData* xml) const {
+        stringstream ss;
+        auto elements = xml->getAllElements();
+
+        ss << "{\n";
+        int count = 0;
+        for (const auto& pair : elements) {
+            ss << "  \"" << pair.first << "\": \"" << pair.second << "\"";
+            if (++count < elements.size()) ss << ",";
+            ss << "\n";
+        }
+        ss << "}";
+
+        return ss.str();
+    }
+
+public:
+    // Constructor: take XMLData (adaptee) as input
+    XmlToJsonAdapter(XMLData* xml) : xmlData(xml) {}
+
+    // Implement target interface by converting adaptee's data
+    string getJsonString() const override {
+        if (!jsonCached) {
+            cachedJson = convertXmlToJson(xmlData);
+            jsonCached = true;
+        }
+        return cachedJson;
+    }
+
+    string getJsonField(const string& field) const override {
+        auto elements = xmlData->getAllElements();
+        auto it = elements.find(field);
+        return it != elements.end() ? it->second : "null";
+    }
+
+    map<string, string> getAllFields() const override {
+        return xmlData->getAllElements();
+    }
+
+    void printJsonData() const override {
+        cout << "Adapted JSON Data (from XML):\n" << getJsonString() << endl;
+    }
+};
+
+// ============= CLIENT: REPORT GENERATOR =============
+
+class ReportGenerator {
+private:
+    shared_ptr<JSONData> reportData;
+
+public:
+    ReportGenerator(shared_ptr<JSONData> data) : reportData(data) {}
+
+    void generateReport() {
+        cout << "\n========== WEATHER REPORT ==========" << endl;
+        cout << "Report Data (JSON format):" << endl;
+        reportData->printJsonData();
+
+        cout << "\nReport Summary:" << endl;
+        auto fields = reportData->getAllFields();
+        cout << "City: " << reportData->getJsonField("city") << endl;
+        cout << "Temperature: " << reportData->getJsonField("temperature") << " °F" << endl;
+        cout << "Humidity: " << reportData->getJsonField("humidity") << "%" << endl;
+        cout << "Condition: " << reportData->getJsonField("condition") << endl;
+        cout << "====================================" << endl;
+    }
+};
+
+// ============= MAIN: ADAPTER PATTERN DEMO =============
+
+int main() {
+    cout << "===== ADAPTER DESIGN PATTERN EXAMPLE =====" << endl;
+    cout << "Converting XML to JSON\n" << endl;
+
+    // ===--- Scenario 1: Native JSON ---===
+    cout << "--- Scenario 1: Native JSON Data ---" << endl;
+    auto nativeJson = make_shared<ConcreteJsonData>();
+    ReportGenerator gen1(nativeJson);
+    gen1.generateReport();
+
+    // ===--- Scenario 2: Third-party XML with Adapter ---===
+    cout << "\n--- Scenario 2: Third-Party XML Data with Adapter ---" << endl;
+
+    // Create XMLData from third-party library
+    XMLData* thirdPartyXml = new XMLData();
+    cout << "Original XML from third-party library:" << endl;
+    thirdPartyXml->printXmlData();
+
+    // Create adapter to convert XML to JSON
+    cout << "\nCreating XmlToJsonAdapter..." << endl;
+    auto adaptedJson = make_shared<XmlToJsonAdapter>(thirdPartyXml);
+
+    // Client uses JSON interface - doesn't know about XML!
+    ReportGenerator gen2(adaptedJson);
+    gen2.generateReport();
+
+    // ===--- Scenario 3: Different Adapters ---===
+    cout << "\n--- Scenario 3: Multiple Formats with Adapters ---" << endl;
+    cout << "You could create similar adapters for:" << endl;
+    cout << "  - XmlToCsvAdapter" << endl;
+    cout << "  - CsvToJsonAdapter" << endl;
+    cout << "  - YamlToJsonAdapter" << endl;
+    cout << "  etc., without modifying Client or ReportGenerator!" << endl;
+
+    delete thirdPartyXml;
+
+    return 0;
+}
+
+================================================================================
+6. TWO-WAY ADAPTER EXAMPLE
+================================================================================
+
+Sometimes you need both directions: XML → JSON and JSON → XML
+
+class BidirectionalAdapter : public JSONData {
+private:
+    XMLData* xmlData;
+    bool fromXml;
+
+public:
+    BidirectionalAdapter(XMLData* xml)
+        : xmlData(xml), fromXml(true) {}
+
+    string getJsonString() const override {
+        if (fromXml) {
+            return convertXmlToJson(xmlData);
+        }
+        return "already JSON";
+    }
+
+    // Can also convert JSON → XML
+    string convertJsonToXml(const map<string, string>& jsonMap) const {
+        stringstream ss;
+        ss << "<root>\n";
+        for (const auto& pair : jsonMap) {
+            ss << "  <" << pair.first << ">"
+               << pair.second
+               << "</" << pair.first << ">\n";
+        }
+        ss << "</root>";
+        return ss.str();
+    }
+};
+
+================================================================================
+7. CLASS ADAPTER vs OBJECT ADAPTER
+================================================================================
+
+METHOD 1: OBJECT ADAPTER (Used above)
+=====================================
+- Adapter wraps adaptee as a member variable (composition)
+- Uses delegation
+- More flexible, can adapt multiple types
+
+    Adapter
+    ├── contains XMLData object
+    └── implements JSONData interface
+
+    class XmlToJsonAdapter : public JSONData {
+    private:
+        XMLData* xmlData;  // composition
+    };
+
+
+METHOD 2: CLASS ADAPTER
+======================
+- Adapter inherits from both target and adaptee (multiple inheritance)
+- Less flexible but more integrated
+- Adaptee interface becomes available in adapter
+
+    Adapter
+    ├── inherits from JSONData
+    └── inherits from XMLData
+
+    class XmlToJsonAdapter : public JSONData, public XMLData {
+        // inherits from both
+    };
+
+    Note: C++ allows multiple inheritance, but it's generally avoided
+    due to complexity. Object Adapter is preferred.
+
+================================================================================
+8. KEY CONCEPTS
+================================================================================
+
+STRUCTURAL PATTERN:
+- Adapter is a structural pattern - deals with object composition
+
+TARGET vs ADAPTEE:
+- Target: Interface client expects (JSONData)
+- Adaptee: Existing incompatible interface (XMLData)
+
+USE WHEN:
+- You have an existing component with incompatible interface
+- You want to reuse legacy code
+- You need to integrate third-party libraries
+- You want to create a common interface for multiple similar objects
+
+SIMILAR PATTERNS:
+- Bridge: Similar structure but different intent
+  - Bridge: Separate abstraction from implementation
+  - Adapter: Convert incompatible interface
+
+- Decorator: Similar but adds functionality
+  - Decorator: Adds behavior to existing interface
+  - Adapter: Changes interface
+
+================================================================================
+9. REAL-WORLD APPLICATIONS
+================================================================================
+
+✓ Data Format Conversion
+  - XML to JSON, CSV to JSON, YAML to JSON converters
+  - Database drivers adapting different SQL dialects
+
+✓ Third-Party Library Integration
+  - Wrapping REST API that returns XML → your app expects JSON
+  - Payment gateway adapters (Stripe, PayPal, Square)
+  - Weather services, mapping services, social media APIs
+
+✓ Hardware Interfaces
+  - Power adapters (110V ↔ 230V)
+  - USB adapters (Type-A ↔ Type-C ↔ Lightning)
+  - HDMI ↔ VGA adapters
+
+✓ Software Interfaces
+  - Database drivers (ODBC, JDBC)
+  - Logger adapters (Log4j, Serilog, Winston)
+  - Testing framework adapters
+
+✓ Legacy System Integration
+  - Wrapping old systems to work with modern interfaces
+  - Gradual migration from old to new systems
+
+✓ IoT & Sensors
+  - Different sensor protocols → unified interface
+  - Different communication protocols → standard API
+
+================================================================================
+10. BEST PRACTICES
+================================================================================
+
+DO:
+✓ Use Adapter when interface mismatch is unavoidable
+✓ Keep adapter logic focused on conversion only
+✓ Document what's being adapted and why
+✓ Consider caching converted data if conversion is expensive
+✓ Use Object Adapter (composition) over Class Adapter (inheritance)
+
+DON'T:
+✗ Use Adapter just to avoid refactoring
+✗ Add business logic to adapter - keep it conversion-only
+✗ Create overly complex adapters - reconsider design
+✗ Use Adapter for everything - sometimes direct refactoring is better
+✗ Forget about performance - measure conversion overhead
+
+================================================================================
