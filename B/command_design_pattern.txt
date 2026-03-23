@@ -1,0 +1,587 @@
+================================================================================
+                      COMMAND DESIGN PATTERN
+================================================================================
+
+1. WHAT IS COMMAND DESIGN PATTERN?
+================================================================================
+The Command Design Pattern encapsulates a request as an object, allowing you to:
+- Parameterize clients with different requests
+- Queue requests
+- Log requests
+- Undo/Redo operations
+
+It decouples the object that makes a request from the one that performs it.
+
+Components:
+- Command: Interface defining the execute() operation
+- ConcreteCommand: Implements Command, binds a receiver with an action
+- Receiver: Knows how to perform the actual work
+- Invoker: Asks the command to carry out the request
+- Client: Creates ConcreteCommand and sets its receiver
+
+================================================================================
+2. WHY WAS IT NEEDED?
+================================================================================
+Problems it solves:
+1. TIGHT COUPLING: Direct dependency between sender and receiver
+   - If you directly call receiver methods, changes in receiver break sender
+   - Hard to test, hard to maintain
+
+2. NO REQUEST HISTORY: Can't queue, log, or undo operations
+   - Need undo/redo functionality? Hard to implement
+   - Can't store requests for delayed execution
+
+3. DIFFICULTY IN ABSTRACTION: Hard to treat requests as objects
+   - Can't pass requests around, store them, or process them dynamically
+
+4. COMMAND VARIATION: Different commands need different logic
+   - Adding new commands requires modifying existing code (violates OCP)
+
+Example Problem (without Command Pattern):
+```
+// Tightly coupled - receiver depends on invoker
+class RemoteControl {
+    TV tv;
+    Lights lights;
+
+    void pressButton1() {
+        tv.turnOn();  // Direct call - tight coupling!
+    }
+    void pressButton2() {
+        lights.toggle();  // Direct call!
+    }
+};
+```
+
+With Command Pattern, you separate request from execution and can:
+- Log all commands executed
+- Implement undo/redo stack
+- Queue commands for later execution
+- Parameterize objects with commands
+- Support macros (command composition)
+
+================================================================================
+3. ADVANTAGES AND DISADVANTAGES
+================================================================================
+
+ADVANTAGES:
+===========
+✓ Decoupling: Invoker and Receiver are completely decoupled
+  - Easy to add new commands without modifying existing code
+  - Follows Open/Closed Principle
+
+✓ Command Abstraction: Requests are first-class objects
+  - Can queue, store, pass around, and process dynamically
+  - Enables undo/redo functionality
+
+✓ Macro Support: Can combine multiple commands into one
+  - Create complex behaviors from simple commands
+
+✓ Audit Trail: Can log all executed commands
+  - Support for transaction systems
+
+✓ Deferred Execution: Execute commands at any time
+  - Threading support, scheduled execution
+
+✓ Easy Extension: Add new commands without modifying existing code
+  - Just create new ConcreteCommand classes
+
+✓ Testability: Easy to test commands in isolation
+  - Mock receivers and test command behavior independently
+
+
+DISADVANTAGES:
+==============
+✗ Increased Complexity: More classes and interfaces
+  - For simple operations, Command pattern might be overkill
+  - Harder to understand for beginners
+
+✗ Memory Overhead: Each command is an object
+  - Commands with undo feature need state storage
+  - Can consume significant memory if many commands in queue
+
+✗ Boilerplate Code: Lots of repetitive class definitions
+  - Many small classes for each command type
+  - Can be tedious to write
+
+✗ Performance: Slight overhead from object creation and method calls
+  - Direct method calls are faster than command execution
+
+================================================================================
+4. CLASS FLOW / ARCHITECTURE
+================================================================================
+
+        ┌─────────────────┐
+        │   <<Interface>> │
+        │    Command      │
+        │─────────────────│
+        │ + execute()     │
+        └────────┬────────┘
+                 △
+                 │
+        ┌────────┴────────┐
+        │                 │
+   ┌────────────────┐   ┌──────────────────┐
+   │ TurnOnCommand  │   │ TurnOffCommand   │
+   ├────────────────┤   ├──────────────────┤
+   │ - receiver     │   │ - receiver       │
+   │ + execute()    │   │ + execute()      │
+   └────────────────┘   └──────────────────┘
+        △ △ △ △              △ △ △ △
+        │ └─┼─┴──────────────┼─┴──┘
+        └───┴────────────────┴───┘
+             Uses Receiver
+
+
+    ┌──────────────────┐
+    │   Receiver       │
+    │ (e.g., TV)       │
+    ├──────────────────┤
+    │ + turnOn()       │
+    │ + turnOff()      │
+    │ + setVolume()    │
+    └──────────────────┘
+
+
+    ┌──────────────────┐
+    │   Invoker        │
+    │ (RemoteControl)  │
+    ├──────────────────┤
+    │ - commands[]     │
+    │ + setCommand()   │
+    │ + executeCmd()   │
+    └──────────────────┘
+         Uses Command
+
+
+Flow:
+====
+1. Client creates ConcreteCommand and sets receiver
+2. Client passes command to Invoker
+3. Invoker stores command
+4. Invoker executes command when needed
+5. Command executes receiver's method
+
+================================================================================
+5. COMPLETE C++ EXAMPLE: REMOTE CONTROL WITH 3 APPLIANCES
+================================================================================
+
+#include <iostream>
+#include <vector>
+#include <memory>
+using namespace std;
+
+// ============= RECEIVERS (APPLIANCES) =============
+
+// Receiver 1: TV
+class TV {
+private:
+    bool isOn = false;
+    int volume = 50;
+
+public:
+    void turnOn() {
+        isOn = true;
+        cout << "TV is turned ON" << endl;
+    }
+
+    void turnOff() {
+        isOn = false;
+        cout << "TV is turned OFF" << endl;
+    }
+
+    void setVolume(int vol) {
+        volume = vol;
+        cout << "TV Volume set to " << volume << endl;
+    }
+
+    void printStatus() {
+        cout << "TV Status: " << (isOn ? "ON" : "OFF")
+             << " | Volume: " << volume << endl;
+    }
+};
+
+// Receiver 2: Light
+class Light {
+private:
+    bool isOn = false;
+    int brightness = 100;  // 0-100
+
+public:
+    void turnOn() {
+        isOn = true;
+        cout << "Light is turned ON" << endl;
+    }
+
+    void turnOff() {
+        isOn = false;
+        cout << "Light is turned OFF" << endl;
+    }
+
+    void setBrightness(int level) {
+        brightness = level;
+        cout << "Light Brightness set to " << brightness << "%" << endl;
+    }
+
+    void printStatus() {
+        cout << "Light Status: " << (isOn ? "ON" : "OFF")
+             << " | Brightness: " << brightness << "%" << endl;
+    }
+};
+
+// Receiver 3: Fan
+class Fan {
+private:
+    bool isOn = false;
+    int speed = 0;  // 0-3
+
+public:
+    void turnOn() {
+        isOn = true;
+        speed = 1;
+        cout << "Fan is turned ON at speed 1" << endl;
+    }
+
+    void turnOff() {
+        isOn = false;
+        speed = 0;
+        cout << "Fan is turned OFF" << endl;
+    }
+
+    void setSpeed(int spd) {
+        if (spd >= 0 && spd <= 3) {
+            speed = spd;
+            if (spd == 0) isOn = false;
+            else isOn = true;
+            cout << "Fan speed set to " << speed << endl;
+        }
+    }
+
+    void printStatus() {
+        cout << "Fan Status: " << (isOn ? "ON" : "OFF")
+             << " | Speed: " << speed << endl;
+    }
+};
+
+// ============= COMMAND INTERFACE =============
+
+class Command {
+public:
+    virtual ~Command() {}
+    virtual void execute() = 0;
+    virtual void undo() = 0;  // For undo/redo functionality
+};
+
+// ============= CONCRETE COMMANDS FOR TV =============
+
+class TVOnCommand : public Command {
+private:
+    TV* receiver;
+
+public:
+    TVOnCommand(TV* tv) : receiver(tv) {}
+
+    void execute() override {
+        receiver->turnOn();
+    }
+
+    void undo() override {
+        receiver->turnOff();
+    }
+};
+
+class TVOffCommand : public Command {
+private:
+    TV* receiver;
+
+public:
+    TVOffCommand(TV* tv) : receiver(tv) {}
+
+    void execute() override {
+        receiver->turnOff();
+    }
+
+    void undo() override {
+        receiver->turnOn();
+    }
+};
+
+class TVVolumeCommand : public Command {
+private:
+    TV* receiver;
+    int volume;
+    int previousVolume;
+
+public:
+    TVVolumeCommand(TV* tv, int vol)
+        : receiver(tv), volume(vol), previousVolume(50) {}
+
+    void execute() override {
+        // In a real system, you'd store previous volume
+        receiver->setVolume(volume);
+    }
+
+    void undo() override {
+        receiver->setVolume(previousVolume);
+    }
+};
+
+// ============= CONCRETE COMMANDS FOR LIGHT =============
+
+class LightOnCommand : public Command {
+private:
+    Light* receiver;
+
+public:
+    LightOnCommand(Light* light) : receiver(light) {}
+
+    void execute() override {
+        receiver->turnOn();
+    }
+
+    void undo() override {
+        receiver->turnOff();
+    }
+};
+
+class LightOffCommand : public Command {
+private:
+    Light* receiver;
+
+public:
+    LightOffCommand(Light* light) : receiver(light) {}
+
+    void execute() override {
+        receiver->turnOff();
+    }
+
+    void undo() override {
+        receiver->turnOn();
+    }
+};
+
+class LightBrightnessCommand : public Command {
+private:
+    Light* receiver;
+    int brightness;
+    int previousBrightness;
+
+public:
+    LightBrightnessCommand(Light* light, int brght)
+        : receiver(light), brightness(brght), previousBrightness(100) {}
+
+    void execute() override {
+        receiver->setBrightness(brightness);
+    }
+
+    void undo() override {
+        receiver->setBrightness(previousBrightness);
+    }
+};
+
+// ============= CONCRETE COMMANDS FOR FAN =============
+
+class FanOnCommand : public Command {
+private:
+    Fan* receiver;
+
+public:
+    FanOnCommand(Fan* fan) : receiver(fan) {}
+
+    void execute() override {
+        receiver->turnOn();
+    }
+
+    void undo() override {
+        receiver->turnOff();
+    }
+};
+
+class FanOffCommand : public Command {
+private:
+    Fan* receiver;
+
+public:
+    FanOffCommand(Fan* fan) : receiver(fan) {}
+
+    void execute() override {
+        receiver->turnOff();
+    }
+
+    void undo() override {
+        receiver->turnOn();
+    }
+};
+
+class FanSpeedCommand : public Command {
+private:
+    Fan* receiver;
+    int speed;
+    int previousSpeed;
+
+public:
+    FanSpeedCommand(Fan* fan, int spd)
+        : receiver(fan), speed(spd), previousSpeed(0) {}
+
+    void execute() override {
+        receiver->setSpeed(speed);
+    }
+
+    void undo() override {
+        receiver->setSpeed(previousSpeed);
+    }
+};
+
+// ============= INVOKER: REMOTE CONTROL =============
+
+class RemoteControl {
+private:
+    vector<shared_ptr<Command>> commandHistory;
+    int historyIndex = 0;
+
+public:
+    // Press button - executes the command
+    void pressButton(shared_ptr<Command> command) {
+        command->execute();
+        commandHistory.push_back(command);
+        historyIndex = commandHistory.size() - 1;
+    }
+
+    // Undo last command
+    void undoLastCommand() {
+        if (historyIndex >= 0 && historyIndex < commandHistory.size()) {
+            commandHistory[historyIndex]->undo();
+            historyIndex--;
+        }
+    }
+
+    // Redo command
+    void redoLastCommand() {
+        if (historyIndex + 1 < commandHistory.size()) {
+            historyIndex++;
+            commandHistory[historyIndex]->execute();
+        }
+    }
+
+    // Show command history
+    void printCommandHistory() {
+        cout << "\n=== Command History ===" << endl;
+        for (int i = 0; i < commandHistory.size(); i++) {
+            cout << "[" << (i + 1) << "] Command executed" << endl;
+        }
+    }
+};
+
+// ============= MAIN: CLIENT USAGE =============
+
+int main() {
+    cout << "===== COMMAND DESIGN PATTERN EXAMPLE =====" << endl;
+    cout << "Remote Control with 3 Appliances" << endl << endl;
+
+    // Create appliances (Receivers)
+    TV tv;
+    Light light;
+    Fan fan;
+
+    // Create remote control (Invoker)
+    RemoteControl remote;
+
+    // ===--- Scenario 1: Turn on TV ---===
+    cout << "\n--- Scenario 1: Using TV Commands ---" << endl;
+    remote.pressButton(make_shared<TVOnCommand>(&tv));
+    tv.printStatus();
+
+    cout << "\nIncreasing TV Volume:" << endl;
+    remote.pressButton(make_shared<TVVolumeCommand>(&tv, 75));
+    tv.printStatus();
+
+    // ===--- Scenario 2: Control Light ---===
+    cout << "\n--- Scenario 2: Using Light Commands ---" << endl;
+    remote.pressButton(make_shared<LightOnCommand>(&light));
+    light.printStatus();
+
+    cout << "\nBrighten the light:" << endl;
+    remote.pressButton(make_shared<LightBrightnessCommand>(&light, 40));
+    light.printStatus();
+
+    // ===--- Scenario 3: Control Fan ---===
+    cout << "\n--- Scenario 3: Using Fan Commands ---" << endl;
+    remote.pressButton(make_shared<FanOnCommand>(&fan));
+    fan.printStatus();
+
+    cout << "\nIncreasing fan speed:" << endl;
+    remote.pressButton(make_shared<FanSpeedCommand>(&fan, 3));
+    fan.printStatus();
+
+    // ===--- Scenario 4: Undo/Redo ---===
+    cout << "\n--- Scenario 4: Undo/Redo Functionality ---" << endl;
+    cout << "TVStatus before undo:" << endl;
+    tv.printStatus();
+
+    cout << "\nExecuting undo..." << endl;
+    remote.undoLastCommand();  // Undo fan speed
+    remote.undoLastCommand();  // Undo fan on
+    remote.undoLastCommand();  // Undo light brightness
+    remote.undoLastCommand();  // Undo light on
+
+    cout << "\nAfter multiple undos:" << endl;
+    cout << "TV: "; tv.printStatus();
+    cout << "Light: "; light.printStatus();
+    cout << "Fan: "; fan.printStatus();
+
+    // ===--- Scenario 5: Macro Command (Turn off everything) ---===
+    cout << "\n--- Scenario 5: Complex Scenario ---" << endl;
+
+    // Turn everything back on
+    remote.pressButton(make_shared<TVOnCommand>(&tv));
+    remote.pressButton(make_shared<LightOnCommand>(&light));
+    remote.pressButton(make_shared<FanOnCommand>(&fan));
+
+    cout << "\nAll appliances ON:" << endl;
+    cout << "TV: "; tv.printStatus();
+    cout << "Light: "; light.printStatus();
+    cout << "Fan: "; fan.printStatus();
+
+    remote.printCommandHistory();
+
+    return 0;
+}
+
+================================================================================
+6. KEY CONCEPTS
+================================================================================
+
+ENCAPSULATION OF REQUESTS:
+- Each command encapsulates a specific action
+- Requests become objects that can be stored, passed, queued
+
+DECOUPLING:
+- RemoteControl doesn't know about TV, Light, Fan
+- Commands act as mediators between Invoker and Receiver
+
+EXTENSIBILITY:
+- Add new appliances: just create new command classes
+- No modification to RemoteControl class
+
+UNDO/REDO:
+- Store executed commands in history
+- Call undo() on previous command
+- Maintain pointer to current position in history
+
+MACRO SUPPORT:
+- Combine multiple commands: create MacroCommand class
+- Public void execute() { cmd1.execute(); cmd2.execute(); ... }
+
+================================================================================
+7. REAL-WORLD APPLICATIONS
+================================================================================
+
+✓ GUI Buttons/Menus: Each button maps to a command
+✓ Transaction Systems: Queue commands, commit/rollback
+✓ Undo/Redo: Word processors, graphic editors
+✓ Scheduling: Execute commands at specific times
+✓ Remote Procedure Calls: Serialize commands and send over network
+✓ Queuing Systems: Job queues with resumable operations
+✓ Macro Recording: Record and replay user actions
+
+================================================================================

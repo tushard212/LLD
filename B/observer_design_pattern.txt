@@ -12,6 +12,51 @@ How it solves the problem (concept)
 - Define a `Subject` that keeps a list of `Observer` references and exposes `attach()`, `detach()`, and `notify()` methods.
 - Concrete observers implement `update()` and register themselves with the subject. When subject state changes it calls `notify()` which calls `update()` on each observer.
 
+CLASS FLOW / ARCHITECTURE:
+=====================================
+
+        ┌──────────────────┐
+        │  <<Interface>>   │
+        │    Observer      │
+        │──────────────────│
+        │ + update(state)  │
+        └────────┬─────────┘
+                 △
+                 │
+        ┌────────┴────────┬──────────┐
+        │                 │          │
+   ┌──────────────┐  ┌──────────────┐
+   │ ConcreteObs1 │  │ ConcreteObs2 │
+   ├──────────────┤  ├──────────────┤
+   │ + update()   │  │ + update()   │
+   └──────────────┘  └──────────────┘
+   (Concrete Observers)
+
+        ┌──────────────────┐
+        │    Subject       │
+        │──────────────────│
+        │ - observers[]    │
+        │ - state          │
+        ├──────────────────┤
+        │ + attach(obs)    │ ←─── Observers
+        │ + detach(obs)    │      register
+        │ + notify()       │      here
+        │ + setState()     │
+        └──────────────────┘
+                 │
+                 │ when state changes,
+                 │ notify() calls
+                 ▼
+        Observer::update()
+        on all observers
+
+Flow:
+1. Observer calls subject.attach(this)
+2. Subject stores observer reference
+3. When subject state changes → setState()
+4. setState() calls notify()
+5. notify() calls update() on each observer
+
 C++ Example (simple, self-contained)
 
 ```cpp

@@ -1,12 +1,68 @@
 Factory Design Pattern (important)
 
-3 types of factory 
+3 types of factory
 
 1->simple factory (this is not a design pattern  , we can call it design principle )
-2->factory method 
+2->factory method
 3->Abstract factory method
 
-SIMPLE Factory...(a factory class that decides which concrete class to instantiate)
+CLASS FLOW / ARCHITECTURE:
+=====================================
+
+        ┌──────────────┐
+        │   Client     │
+        │──────────────│
+        │ - requests   │
+        │  shapes      │
+        └──────┬───────┘
+               │
+               │ uses
+               ▼
+        ┌──────────────────────┐
+        │   ShapeFactory       │
+        │  (SIMPLE FACTORY)    │
+        │──────────────────────│
+        │ + createShape(type)  │
+        └──────────┬───────────┘
+                   │
+                   │ creates
+        ┌──────────┴──────────┐
+        │                     │
+   ┌────────────┐        ┌───────────┐
+   │ <<Interface>>       │
+   │   Shape    │        │
+   ├────────────┤        │
+   │ + draw()   │        │
+   │ + area()   │        │
+   └────────────┘        │
+        △                │
+        │                │
+    ┌───┴───┬────────┬───┘
+    │       │        │
+┌───────┐ ┌────────┐ ┌─────────┐
+│Circle │ │Rectangle│ │Triangle │
+├───────┤ ├────────┤ ├─────────┤
+│ radius│ │ width  │ │  base   │
+│       │ │ height │ │ height  │
+└───────┘ └────────┘ └─────────┘
+(Concrete Products)
+
+SIMPLE Factory Pattern Usage:
+=====================================
+
+      Client
+        │
+        │ ShapeFactory::createShape("circle")
+        ▼
+  ┌────────────────┐
+  │ ShapeFactory   │
+  │ analyzes type  │
+  └────────────────┘
+        │
+        │ returns new Circle()
+        ▼
+      Shape* (polymorphic pointer)
+
 #include <iostream>
 #include <memory>
 #include <string>
@@ -231,7 +287,7 @@ int main() {
 
 
 
-ABSTRACT FACTORY METHOD...(Provides a interface for creating families of related objects without specifying their concrete classes) 
+ABSTRACT FACTORY METHOD...(Provides a interface for creating families of related objects without specifying their concrete classes)
 
 #include <iostream>
 #include <memory>

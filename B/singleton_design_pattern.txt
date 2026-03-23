@@ -1,6 +1,61 @@
 MOST USED AND MOST SIMPLE
 
-EK hi instance create kr skte ha
+EK hi instance create kr skte ha (Only one instance can be created)
+
+CLASS FLOW / ARCHITECTURE:
+=====================================
+
+        ┌────────────────────────┐
+        │     Singleton          │
+        ├────────────────────────┤
+        │ - instance (static)    │
+        │ - Singleton() [private]│
+        ├────────────────────────┤
+        │ + getInstance(): static│
+        └────────────────────────┘
+                 △
+                 │
+         Prevents multiple
+         instantiation via:
+         - Private constructor
+         - Delete copy constructor
+         - Delete assignment operator
+         - Static getInstance()
+
+Flow:
+======
+
+   Client Code
+       │
+       │ getInstance()
+       ▼
+   ┌───────────────┐
+   │ Check if      │
+   │ instance      │
+   │ exists?       │
+   └───┬───────┬───┘
+       │       │
+      YES     NO
+       │       │
+       │       ▼
+       │   ┌──────────┐
+       │   │ Create   │
+       │   │ instance │
+       │   └──────────┘
+       │       │
+       └───┬───┘
+           ▼
+       Return same instance
+       (always the same)
+
+Variant: EAGER INITIALIZATION
+==============================
+
+   static Singleton* instance = new Singleton();
+          ↑
+      Created at
+      program start
+      (BEFORE main())
 
 the implementation of this logic is called singleton design pattern
 

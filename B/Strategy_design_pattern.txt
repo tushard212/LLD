@@ -1,16 +1,62 @@
-Strategy pattern says inheritence is not good 
+Strategy pattern says inheritence is not good
 
 
 Problems using inheritence
-1-> code non reusability 
-2->to add a new feature a lot of changes were required 
-3-> breaking open closed principle 
+1-> code non reusability
+2->to add a new feature a lot of changes were required
+3-> breaking open closed principle
 
 solution of inheritence is not more inheritence.
 composition should be favoured over inheritence.
 
 
-THE PRINCIPLE DEFINES A FAMILY OF ALGORITHM AND SUGGESTS THAT WE PUT THE CHANGING ONES SEPARATED FROM THE CONSTANT ONES SO IT CAN BE CHANGED AS PER NEEDED DURING RUNTIME 
+THE PRINCIPLE DEFINES A FAMILY OF ALGORITHM AND SUGGESTS THAT WE PUT THE CHANGING ONES SEPARATED FROM THE CONSTANT ONES SO IT CAN BE CHANGED AS PER NEEDED DURING RUNTIME
+
+CLASS FLOW / ARCHITECTURE:
+=====================================
+
+   ┌──────────────────┐
+   │  <<Interface>>   │
+   │ PaymentStrategy  │
+   ├──────────────────┤
+   │ + pay(amount)    │
+   └─────────┬────────┘
+             △
+    ┌────────┼────────┬──────────┐
+    │        │        │          │
+┌─────────┐┌──────┐┌──────────┐
+│ Credit  ││PayPal││ Crypto   │
+│ Card    ││      ││          │
+├─────────┤├──────┤├──────────┤
+│ + pay() ││pay() ││  pay()   │
+└─────────┘└──────┘└──────────┘
+(Concrete Strategies)
+
+   ┌──────────────────────┐
+   │   ShoppingCart       │
+   │    (Context)         │
+   ├──────────────────────┤
+   │ - strategy           │ ←─── HAS-A
+   │ - total              │      (composition)
+   ├──────────────────────┤
+   │ + setPayment(strat)  │
+   │ + checkout()         │
+   └──────────────────────┘
+             │
+             │ delegates to
+             ▼
+      PaymentStrategy
+      (any concrete one)
+
+Flow:
+======
+1. Client creates ShoppingCart
+2. Client sets PaymentStrategy (CreditCard, PayPal, etc)
+3. Client calls checkout()
+4. ShoppingCart delegates to strategy.pay()
+5. Polymorphism: right strategy method is called
+
+Advantage: Strategy can be changed at runtime!
 
 #include <iostream>
 #include <memory>

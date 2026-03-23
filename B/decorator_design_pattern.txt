@@ -12,6 +12,35 @@ How it solves the problem
 - Create concrete decorators that wrap the original object and add new behavior while delegating to the wrapped object.
 - Decorators can be stacked/chained — each adds one feature without knowing about others.
 
+CLASS FLOW / ARCHITECTURE:
+=====================================
+
+        ┌─────────────────┐
+        │ <<Interface>>   │
+        │     IMario      │
+        │─────────────────│
+        │ + display()     │
+        │ + getSpeed()    │
+        │ + getPower()    │
+        └────────┬────────┘
+                 △
+        ┌────────┼────────┐
+        │                 │
+   ┌────────────┐   ┌─────────────────┐
+   │   Mario    │   │ MarioDecorator  │
+   ├────────────┤   ├─────────────────┤
+   │ - speed: 5 │   │ # mario         │
+   │ - power: 1 │   │ + execute()     │
+   └────────────┘   └─────────────────┘
+   (Concrete)              △
+        ↑            ┌──────┼──────┬──────┐
+        │            │             │      │
+        │        ┌─────────┐  ┌────────┐ ┌──────────┐
+        │        │FireMario│  │IceMario│ │SuperMario│
+        │        └─────────┘  └────────┘ └──────────┘
+        │        (Concrete Decorators)
+        └── Wrapped by Decorators
+
 C++ Example — Mario Power-ups (Decorator Pattern)
 
 ```cpp
@@ -201,5 +230,4 @@ When to use
 - Use when you need to add responsibilities to objects dynamically and unpredictably.
 - Use when subclassing would create too many classes.
 - Use in frameworks where features should be composable (UI components, middleware, etc.).
-
 
