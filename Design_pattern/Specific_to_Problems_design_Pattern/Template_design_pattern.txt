@@ -1,0 +1,858 @@
+================================================================================
+                    TEMPLATE METHOD DESIGN PATTERN
+================================================================================
+
+1. WHAT IS TEMPLATE METHOD DESIGN PATTERN?
+================================================================================
+The Template Method Design Pattern defines the skeleton of an algorithm in a
+base class, but lets subclasses override specific steps without changing the
+algorithm's structure.
+
+Think of it like a cooking recipe:
+  - Recipe structure is fixed: prep → cook → season → plate
+  - Each chef (subclass) can cook differently
+  - But the overall steps remain the same
+  - Some steps are optional (hooks), some mandatory (template)
+
+Components:
+- AbstractClass: Defines template method with algorithm skeleton
+- Template Method: Defines overall algorithm structure
+- Abstract Methods: Steps that subclasses MUST implement
+- Concrete Methods: Steps with default implementation
+- Hook Methods: Optional override points (do nothing by default)
+- ConcreteClass: Implements abstract methods with specific algorithm
+
+================================================================================
+2. WHY WAS IT NEEDED?
+================================================================================
+Problems it solves:
+
+1. CODE DUPLICATION
+   - Multiple algorithms with same structure, different details
+   - Common steps repeated in every implementation
+   - Changes to common steps require updates everywhere
+
+2. ALGORITHM VARIATIONS
+   - Core algorithm is same, only certain steps vary
+   - Can't use inheritance directly (wrong pattern)
+   - Interface is too flexible (no structure guaranteed)
+
+3. INVERSION OF CONTROL
+   - Want framework to call user code, not vice versa
+   - "Hollywood Principle": Don't call us, we'll call you
+   - User implements specific methods, framework orchestrates
+
+4. ENFORCED STRUCTURE
+   - Client must follow specific algorithm steps
+   - Can't accidentally skip or reorder important steps
+   - Guarantee of consistent process
+
+Example Problem (without Template Method):
+```
+// Duplicate code - each model implements same workflow
+class NeuralNetworkModel {
+    void train() {
+        loadData();              // REPEATED!
+        preprocessData();        // REPEATED!
+        // Neural-specific code
+        buildModel();            // Different
+        trainModel();            // Different
+        evaluateModel();         // REPEATED!
+        saveModel();             // REPEATED!
+    }
+};
+
+class DecisionTreeModel {
+    void train() {
+        loadData();              // REPEATED!
+        preprocessData();        // REPEATED!
+        // Decision-Tree-specific code
+        buildModel();            // Different
+        trainModel();            // Different
+        evaluateModel();         // REPEATED!
+        saveModel();             // REPEATED!
+    }
+};
+
+// If we change loadData() logic, must update all models!
+// Code duplication, hard to maintain
+```
+
+With Template Method:
+```
+// Base class defines structure
+abstract class ModelTrainer {
+    // Template method - controls algorithm structure
+    final void train() {
+        loadData();              // Same for all
+        preprocessData();        // Same for all
+        buildModel();            // DIFFERENT - abstract
+        trainModel();            // DIFFERENT - abstract
+        evaluateModel();         // Same for all
+        saveModel();             // Same for all
+    }
+
+    abstract void buildModel();  // Subclass implements
+    abstract void trainModel();  // Subclass implements
+
+    void loadData() { /* common */ }
+    void preprocessData() { /* common */ }
+    void evaluateModel() { /* common */ }
+    void saveModel() { /* common */ }
+}
+
+class NeuralNetworkModel extends ModelTrainer {
+    void buildModel() { /* NN-specific */ }
+    void trainModel() { /* NN-specific */ }
+}
+
+// Cleaner! No duplication, guaranteed structure
+```
+
+================================================================================
+3. ADVANTAGES AND DISADVANTAGES
+================================================================================
+
+ADVANTAGES:
+===========
+✓ Code Reuse: Common algorithm steps in one place
+  - No duplication
+  - Easy to maintain common logic
+  - Changes propagate automatically
+
+✓ Enforced Consistency: Guaranteed algorithm structure
+  - All subclasses follow same process
+  - Can't accidentally skip or reorder steps
+  - Standardized workflow
+
+✓ Open/Closed Principle: Easy to add new implementations
+  - Add new model type without modifying existing ones
+  - Just implement abstract methods
+  - Algorithm skeleton unchanged
+
+✓ Inversion of Control: Framework calls subclass code
+  - Subclass doesn't need to worry about orchestration
+  - Just implements specific steps
+  - Framework manages overall flow
+
+✓ Flexibility with Structure: Optional override points (hooks)
+  - Can provide default implementations
+  - Subclasses can override if needed
+  - Partial customization possible
+
+✓ Single Responsibility: Base class has algorithm, subclasses implement steps
+  - Clear separation of concerns
+  - Each class has focused responsibility
+
+✓ Easy Testing: Can mock/stub specific steps
+  - Test template method logic
+  - Test individual steps independently
+
+
+DISADVANTAGES:
+==============
+✗ Rigid Structure: Algorithm skeleton can't be changed
+  - If different algorithms need different structure, doesn't fit
+  - Can become limiting as requirements evolve
+
+✗ Increased Complexity: More classes and inheritance
+  - Abstract base class + multiple concrete classes
+  - Harder to understand full picture
+
+✗ Difficult to Extend: Changing template affects all subclasses
+  - Adding new generic step requires updating all implementations
+  - Inheritance chain can become deep
+
+✗ Fragile Base Class Problem: Base class changes break subclasses
+  - If base class is modified, all subclasses must adapt
+  - Hidden dependencies between base and derived
+
+✗ Poor Discoverability: Hard to understand algorithm from subclass alone
+  - Must look at base class to understand flow
+  - Scattered across multiple files
+
+✗ Inflexible for Different Variations: One structure fits all
+  - What if some models need different steps?
+  - Hook methods add complexity
+
+✗ Performance: Extra method calls and indirection
+  - Virtual method calls add overhead
+  - May matter in performance-critical code
+
+================================================================================
+4. CLASS FLOW / ARCHITECTURE
+================================================================================
+
+        ┌──────────────────────────────────────────────┐
+        │  <<Abstract>>                                │
+        │     ModelTrainer                             │
+        ├──────────────────────────────────────────────┤
+        │ ╔════════════════════════════════════════╗  │
+        │ ║ TEMPLATE METHOD (Final)                ║  │
+        │ ║ final void train() {                   ║  │
+        │ ║   1. loadData()          [concrete]    ║  │
+        │ ║   2. preprocessData()    [concrete]    ║  │
+        │ ║   3. buildModel()        [abstract]    ║  │─┐
+        │ ║   4. trainModel()        [abstract]    ║  │ │ Structure
+        │ ║   5. evaluateModel()     [concrete]    ║  │ │ FIXED!
+        │ ║   6. saveModel()         [concrete]    ║  │ │
+        │ ║   7. onTrainComplete()   [hook]        ║  │ │
+        │ ╚════════════════════════════════════════╝  │-┘
+        ├──────────────────────────────────────────────┤
+        │ ABSTRACT METHODS (must override)             │
+        │ + buildModel(): void = 0                     │
+        │ + trainModel(): void = 0                     │
+        │                                              │
+        │ CONCRETE METHODS (optional override)         │
+        │ # loadData(): void                           │
+        │ # preprocessData(): void                     │
+        │ # evaluateModel(): void                      │
+        │ # saveModel(): void                          │
+        │                                              │
+        │ HOOK METHODS (optional override)             │
+        │ # onTrainStart(): void {}                    │
+        │ # onTrainComplete(): void {}                 │
+        └──────────────────────────────────────────────┘
+                        △ △ △ △
+                        │ │ │ │
+        ┌───────────────┘ │ │ └─────────────┬─────────────┐
+        │                 │ │               │             │
+   ┌────────────────────┐ │ │  ┌────────────────────┐  ┌──────────────────┐
+   │NeuralNetworkModel  │ │ │  │ DecisionTreeModel  │  │RandomForestModel │
+   ├────────────────────┤ │ │  ├────────────────────┤  ├──────────────────┤
+   │ - layers           │ │ │  │ - maxDepth         │  │ - numTrees       │
+   │ - activation       │ │ │  │ - minSamples       │  │ - maxDepth       │
+   ├────────────────────┤ │ │  ├────────────────────┤  ├──────────────────┤
+   │ + buildModel()     │ │ │  │ + buildModel()     │  │ + buildModel()   │
+   │ + trainModel()     │ │ │  │ + trainModel()     │  │ + trainModel()   │
+   │ + onTrainStart()   │ │ │  │ + onTrainComplete()│  │ + evaluateModel()│
+   └────────────────────┘ │ │  └────────────────────┘  └──────────────────┘
+   (implements abstract)   │ │  (implements abstract)  (implements abstract)
+                          │ │
+                      All share same
+                      train() structure!
+
+
+Template Method Flow:
+====================
+
+Client calls: model.train()
+         │
+         ▼
+    ┌──────────────────────┐
+    │ 1. loadData()        │  (Base class)
+    └──────────────────────┘
+         │
+         ▼
+    ┌──────────────────────┐
+    │ 2. preprocessData()  │  (Base class)
+    └──────────────────────┘
+         │
+         ▼
+    ┌──────────────────────────┐
+    │ 3. buildModel()          │◄─── Virtual! (Subclass override)
+    │    if NeuralNetworkModel │
+    │    → Build neural layers │
+    │    if DecisionTreeModel  │
+    │    → Build decision tree │
+    └──────────────────────────┘
+         │
+         ▼
+    ┌──────────────────────────┐
+    │ 4. trainModel()          │◄─── Virtual! (Subclass override)
+    │    if NeuralNetworkModel │
+    │    → Gradient descent    │
+    │    if DecisionTreeModel  │
+    │    → Information gain    │
+    └──────────────────────────┘
+         │
+         ▼
+    ┌──────────────────────┐
+    │ 5. evaluateModel()   │  (Base class)
+    └──────────────────────┘
+         │
+         ▼
+    ┌──────────────────────┐
+    │ 6. saveModel()       │  (Base class)
+    └──────────────────────┘
+         │
+         ▼
+    ┌──────────────────────┐
+    │ 7. onTrainComplete() │  (Hook - optional override)
+    └──────────────────────┘
+         │
+         ▼
+    Training Complete!
+
+================================================================================
+5. COMPLETE C++ EXAMPLE: MACHINE LEARNING MODEL TRAINER
+================================================================================
+
+#include <iostream>
+#include <string>
+#include <vector>
+#include <memory>
+#include <cmath>
+#include <chrono>
+#include <map>
+using namespace std;
+
+// ============= ABSTRACT CLASS: MODEL TRAINER =============
+
+// Template Method Pattern: Defines algorithm skeleton
+abstract class ModelTrainer {
+protected:
+    string modelName;
+    vector<vector<double>> trainingData;
+    vector<int> labels;
+    double accuracy = 0.0;
+    long trainingTime = 0;
+
+    // Concrete methods - same for all models
+    void loadData() {
+        cout << "[ModelTrainer] Loading training data..." << endl;
+        // Simulate loading data
+        trainingData = {{1.0, 2.0}, {2.0, 3.0}, {3.0, 4.0}};
+        labels = {0, 1, 1};
+        cout << "[ModelTrainer] ✓ Loaded " << trainingData.size()
+             << " samples" << endl;
+    }
+
+    void preprocessData() {
+        cout << "[ModelTrainer] Preprocessing data..." << endl;
+        // Normalize features
+        cout << "[ModelTrainer] • Normalizing features" << endl;
+        cout << "[ModelTrainer] • Handling missing values" << endl;
+        cout << "[ModelTrainer] • Feature scaling" << endl;
+        cout << "[ModelTrainer] ✓ Preprocessing complete" << endl;
+    }
+
+    void evaluateModel() {
+        cout << "[ModelTrainer] Evaluating model on test set..." << endl;
+        // Simulate evaluation
+        accuracy = 0.85 + (rand() % 10) / 100.0;
+        cout << "[ModelTrainer] • Accuracy: " << accuracy << endl;
+        cout << "[ModelTrainer] • Precision: " << (accuracy - 0.05) << endl;
+        cout << "[ModelTrainer] • Recall: " << (accuracy - 0.02) << endl;
+        cout << "[ModelTrainer] ✓ Evaluation complete" << endl;
+    }
+
+    void saveModel() {
+        cout << "[ModelTrainer] Saving model to disk..." << endl;
+        cout << "[ModelTrainer] ✓ Model saved as '"
+             << modelName << ".model'" << endl;
+    }
+
+    // Hook methods - optional override points
+    virtual void onTrainStart() {
+        // Default: do nothing - subclasses can override
+    }
+
+    virtual void onTrainComplete() {
+        // Default: do nothing - subclasses can override
+        cout << "[ModelTrainer] Training finished!" << endl;
+    }
+
+public:
+    ModelTrainer(const string& name) : modelName(name) {}
+
+    virtual ~ModelTrainer() {}
+
+    // TEMPLATE METHOD - Fixed algorithm structure!
+    final void train() {
+        cout << "\n" << string(70, '=') << endl;
+        cout << "TRAINING " << modelName << endl;
+        cout << string(70, '=') << "\n" << endl;
+
+        auto startTime = chrono::high_resolution_clock::now();
+
+        // Step 1: Load data
+        cout << "STEP 1: Data Loading" << endl;
+        cout << "──────────────────────" << endl;
+        loadData();
+        cout << endl;
+
+        // Step 2: Preprocess
+        cout << "STEP 2: Data Preprocessing" << endl;
+        cout << "──────────────────────────" << endl;
+        preprocessData();
+        cout << endl;
+
+        // Optional hook
+        onTrainStart();
+        cout << endl;
+
+        // Step 3: Build model (DIFFERENT for each subclass)
+        cout << "STEP 3: Building Model" << endl;
+        cout << "───────────────────────" << endl;
+        buildModel();  // ABSTRACT - subclass implements
+        cout << endl;
+
+        // Step 4: Train model (DIFFERENT for each subclass)
+        cout << "STEP 4: Training Model" << endl;
+        cout << "──────────────────────" << endl;
+        trainModel();  // ABSTRACT - subclass implements
+        cout << endl;
+
+        // Step 5: Evaluate
+        cout << "STEP 5: Evaluating Model" << endl;
+        cout << "────────────────────────" << endl;
+        evaluateModel();
+        cout << endl;
+
+        // Step 6: Save
+        cout << "STEP 6: Saving Model" << endl;
+        cout << "───────────────────" << endl;
+        saveModel();
+        cout << endl;
+
+        // Optional hook
+        onTrainComplete();
+
+        auto endTime = chrono::high_resolution_clock::now();
+        trainingTime = chrono::duration_cast<chrono::milliseconds>(
+            endTime - startTime).count();
+
+        cout << string(70, '=') << endl;
+        cout << "TRAINING COMPLETE!" << endl;
+        cout << "Time taken: " << trainingTime << "ms" << endl;
+        cout << string(70, '=') << "\n" << endl;
+    }
+
+    // Abstract methods - subclasses MUST implement
+    virtual void buildModel() = 0;
+    virtual void trainModel() = 0;
+
+    // Public interface
+    string getModelName() const { return modelName; }
+
+    double getAccuracy() const { return accuracy; }
+
+    long getTrainingTime() const { return trainingTime; }
+};
+
+// ============= CONCRETE CLASS 1: NEURAL NETWORK MODEL =============
+
+class NeuralNetworkModel : public ModelTrainer {
+private:
+    vector<int> layerSizes;
+    string activationFunction;
+
+protected:
+    void buildModel() override {
+        cout << "[NeuralNetworkModel] Building neural network..." << endl;
+        layerSizes = {10, 64, 32, 1};  // Input, hidden, hidden, output
+        activationFunction = "ReLU";
+
+        cout << "[NeuralNetworkModel] • Layer configuration:" << endl;
+        for (int i = 0; i < layerSizes.size(); i++) {
+            cout << "[NeuralNetworkModel]   Layer " << i
+                 << ": " << layerSizes[i] << " neurons" << endl;
+        }
+        cout << "[NeuralNetworkModel] • Activation function: "
+             << activationFunction << endl;
+        cout << "[NeuralNetworkModel] • Initialization: Xavier initialization" << endl;
+        cout << "[NeuralNetworkModel] ✓ Neural network built" << endl;
+    }
+
+    void trainModel() override {
+        cout << "[NeuralNetworkModel] Training with backpropagation..." << endl;
+        cout << "[NeuralNetworkModel] • Learning rate: 0.001" << endl;
+        cout << "[NeuralNetworkModel] • Optimizer: Adam" << endl;
+        cout << "[NeuralNetworkModel] • Epochs: 100" << endl;
+        cout << "[NeuralNetworkModel] • Batch size: 32" << endl;
+
+        // Simulate training
+        for (int epoch = 1; epoch <= 5; epoch++) {
+            double loss = 0.5 / epoch;  // Simulated decreasing loss
+            cout << "[NeuralNetworkModel]   Epoch " << epoch
+                 << "/100 - Loss: " << loss << endl;
+        }
+        cout << "[NeuralNetworkModel] ✓ Training complete" << endl;
+    }
+
+    // Optional hook override
+    void onTrainStart() override {
+        cout << "[NeuralNetworkModel] Neural Network Training Starting..." << endl;
+        cout << "[NeuralNetworkModel] Initializing weights and biases" << endl;
+    }
+
+    void onTrainComplete() override {
+        cout << "[NeuralNetworkModel] Neural Network successfully trained!" << endl;
+        cout << "[NeuralNetworkModel] Final training loss: 0.001" << endl;
+        cout << "[NeuralNetworkModel] Validation accuracy: "
+             << (accuracy * 100) << "%" << endl;
+    }
+
+public:
+    NeuralNetworkModel() : ModelTrainer("Neural Network Model") {}
+};
+
+// ============= CONCRETE CLASS 2: DECISION TREE MODEL =============
+
+class DecisionTreeModel : public ModelTrainer {
+private:
+    int maxDepth;
+    int minSamplesSplit;
+
+protected:
+    void buildModel() override {
+        cout << "[DecisionTreeModel] Building decision tree..." << endl;
+        maxDepth = 10;
+        minSamplesSplit = 5;
+
+        cout << "[DecisionTreeModel] • Max depth: " << maxDepth << endl;
+        cout << "[DecisionTreeModel] • Min samples to split: "
+             << minSamplesSplit << endl;
+        cout << "[DecisionTreeModel] • Criterion: Gini impurity" << endl;
+        cout << "[DecisionTreeModel] ✓ Tree structure initialized" << endl;
+    }
+
+    void trainModel() override {
+        cout << "[DecisionTreeModel] Growing decision tree..." << endl;
+        cout << "[DecisionTreeModel] • Calculating information gain" << endl;
+        cout << "[DecisionTreeModel] • Finding best split features" << endl;
+
+        for (int depth = 1; depth <= 5; depth++) {
+            cout << "[DecisionTreeModel]   Depth " << depth
+                 << " - Nodes: " << (int)pow(2, depth) << endl;
+        }
+
+        cout << "[DecisionTreeModel] ✓ Tree training complete" << endl;
+    }
+
+    void onTrainComplete() override {
+        cout << "[DecisionTreeModel] Decision Tree trained!" << endl;
+        cout << "[DecisionTreeModel] Final tree depth: 8" << endl;
+        cout << "[DecisionTreeModel] Total nodes: 127" << endl;
+    }
+
+public:
+    DecisionTreeModel() : ModelTrainer("Decision Tree Model") {}
+};
+
+// ============= CONCRETE CLASS 3: RANDOM FOREST MODEL =============
+
+class RandomForestModel : public ModelTrainer {
+private:
+    int numTrees;
+    int maxDepth;
+
+protected:
+    void buildModel() override {
+        cout << "[RandomForestModel] Building random forest..." << endl;
+        numTrees = 50;
+        maxDepth = 15;
+
+        cout << "[RandomForestModel] • Number of trees: " << numTrees << endl;
+        cout << "[RandomForestModel] • Max depth per tree: " << maxDepth << endl;
+        cout << "[RandomForestModel] • Feature selection: sqrt(total features)" << endl;
+        cout << "[RandomForestModel] ✓ Forest structure initialized" << endl;
+    }
+
+    void trainModel() override {
+        cout << "[RandomForestModel] Training " << numTrees
+             << " decision trees..." << endl;
+
+        for (int tree = 1; tree <= 5; tree++) {
+            cout << "[RandomForestModel]   Training tree " << tree
+                 << "/" << numTrees << endl;
+        }
+        cout << "[RandomForestModel]   ..." << endl;
+        cout << "[RandomForestModel]   Training tree 50/50" << endl;
+
+        cout << "[RandomForestModel] ✓ Forest training complete" << endl;
+    }
+
+    void onTrainStart() override {
+        cout << "[RandomForestModel] Starting parallel tree training..." << endl;
+    }
+
+    void onTrainComplete() override {
+        cout << "[RandomForestModel] Random Forest trained!" << endl;
+        cout << "[RandomForestModel] Trees trained: " << numTrees << endl;
+        cout << "[RandomForestModel] Feature importance computed" << endl;
+    }
+
+public:
+    RandomForestModel() : ModelTrainer("Random Forest Model") {}
+};
+
+// ============= CLIENT CODE =============
+
+int main() {
+    cout << "===== TEMPLATE METHOD DESIGN PATTERN =====" << endl;
+    cout << "Machine Learning Model Training Framework\n" << endl;
+
+    // ===--- Create different model trainers ---===
+    vector<shared_ptr<ModelTrainer>> models;
+
+    models.push_back(make_shared<NeuralNetworkModel>());
+    models.push_back(make_shared<DecisionTreeModel>());
+    models.push_back(make_shared<RandomForestModel>());
+
+    // ===--- Train each model (same structure, different implementations) ---===
+    for (auto& model : models) {
+        model->train();
+    }
+
+    // ===--- Display results ---===
+    cout << "\n" << string(70, '=') << endl;
+    cout << "TRAINING RESULTS SUMMARY" << endl;
+    cout << string(70, '=') << "\n" << endl;
+
+    cout << "Model Performance Comparison:" << endl;
+    cout << "─────────────────────────────" << endl;
+
+    for (const auto& model : models) {
+        cout << model->getModelName() << endl;
+        cout << "  • Accuracy: " << (model->getAccuracy() * 100) << "%" << endl;
+        cout << "  • Training Time: " << model->getTrainingTime() << "ms" << endl;
+        cout << endl;
+    }
+
+    cout << string(70, '=') << endl;
+    cout << "KEY OBSERVATIONS:" << endl;
+    cout << "✓ All models followed the SAME training workflow" << endl;
+    cout << "✓ Each model implemented buildModel() and trainModel() differently" << endl;
+    cout << "✓ Common steps (load, preprocess, evaluate, save) only in base class" << endl;
+    cout << "✓ New model types can be added without modifying existing code" << endl;
+    cout << "✓ Framework ensures algorithm structure is always followed" << endl;
+    cout << string(70, '=') << "\n" << endl;
+
+    return 0;
+}
+
+================================================================================
+6. TEMPLATE METHOD vs SIMILAR PATTERNS
+================================================================================
+
+TEMPLATE METHOD vs STRATEGY:
+============================
+Template Method:
+  - Algorithm skeleton in base class
+  - Subclasses fill in specific steps
+  - Inheritance-based
+  - Steps controlled by template method
+  - Less flexible: structure is fixed
+
+Strategy:
+  - Entire algorithm encapsulated in strategy object
+  - Context delegates to strategy
+  - Composition-based
+  - Algorithm selected at runtime
+  - More flexible: can swap entire algorithm
+
+Example:
+  Template: NeuralNetworkModel extends ModelTrainer
+  Strategy: pass TrainingStrategy to ModelTrainer
+
+
+TEMPLATE METHOD vs FACTORY:
+===========================
+Template Method:
+  - Controls algorithm execution
+  - Defines how something is used
+
+Factory:
+  - Creates objects
+  - Defines what is created
+
+Can be combined:
+  Factory creates model trainers
+  Template method defines training process
+
+
+TEMPLATE METHOD vs DECORATOR:
+==============================
+Template Method:
+  - Defines algorithm structure
+  - Inheritance-based
+  - Fixed extension points (abstract methods)
+
+Decorator:
+  - Adds behavior dynamically
+  - Composition-based
+  - Wraps original object
+
+Template uses inheritance, Decorator uses composition
+
+================================================================================
+7. KEY CONCEPTS
+================================================================================
+
+ALGORITHM SKELETON:
+- Template method defines overall structure
+- Invariant parts same for all subclasses
+- Variant parts implemented by subclasses
+
+DEFINITE METHOD:
+- Template method is final (can't override)
+- Ensures structure is always followed
+
+ABSTRACT METHODS:
+- Steps that MUST be implemented
+- Subclass HAS-TO override
+
+CONCRETE METHODS:
+- Default implementation for optional steps
+- Subclass CAN override if needed
+
+HOOK METHODS:
+- Empty default implementation
+- Subclass SHOULD override if needs customization
+- Optional extension points
+
+INVERSION OF CONTROL:
+- Base class calls subclass methods
+- Framework controls flow
+- Subclass provides specific behavior
+
+HOLLYWOOD PRINCIPLE:
+- Don't call us, we'll call you
+- Base class calls subclass methods
+- Not vice versa
+
+================================================================================
+8. REAL-WORLD APPLICATIONS
+================================================================================
+
+✓ Machine Learning Frameworks (Example given)
+  - sklearn, TensorFlow, PyTorch
+  - Base Estimator class with fit()/predict() template
+
+✓ Software Frameworks
+  - Spring Framework (lifecycle hooks)
+  - Django (view processing)
+  - ASP.NET (request handling pipeline)
+
+✓ GUI Applications
+  - Window initialization (create → load → paint → show)
+  - Button click handling (validate → process → notify)
+
+✓ Data Processing Pipelines
+  - Extract → Transform → Load (ETL)
+  - Read data → Validate → Process → Write
+
+✓ Game Development
+  - Game loop (update → render → input)
+  - Character AI (sense → think → act)
+
+✓ Compilers and Interpreters
+  - Parsing (tokenize → syntax analysis → semantic analysis)
+  - Code generation (optimize → emit → finalize)
+
+✓ Web Frameworks
+  - Request handling (authenticate → authorize → process)
+  - Response generation (format → compress → send)
+
+✓ Document Processing
+  - Read → Parse → Validate → Transform → Write
+
+✓ Testing Frameworks
+  - setUp() → test() → tearDown()
+
+✓ Event Handling
+  - Capture → Process → Bubble (DOM events)
+
+================================================================================
+9. IMPLEMENTATION PATTERNS
+================================================================================
+
+PATTERN 1: PURE TEMPLATE METHOD
+===============================
+abstract class Template {
+    final void execute() {
+        step1();
+        step2();
+        step3();
+    }
+    protected abstract void step2();
+    protected void step1() { }
+    protected void step3() { }
+}
+
+PATTERN 2: HOOKS FOR CUSTOMIZATION
+==================================
+abstract class Template {
+    final void execute() {
+        onStart();
+        step1();
+        step2();
+        onEnd();
+    }
+    protected void onStart() { }      // Hook
+    protected void onEnd() { }        // Hook
+    protected abstract void step1();
+    protected abstract void step2();
+}
+
+PATTERN 3: MULTIPLE TEMPLATE METHODS
+====================================
+abstract class Template {
+    final void execute() {
+        processInput();
+        processOutput();
+    }
+    final void processInput() {
+        onInputStart();
+        readData();
+        onInputEnd();
+    }
+    protected abstract void readData();
+}
+
+================================================================================
+10. BEST PRACTICES
+================================================================================
+
+DO:
+✓ Use for algorithms with clear structure
+✓ Identify invariant and variant parts
+✓ Keep template method simple and readable
+✓ Use abstract methods for required customization points
+✓ Use hook methods for optional customization
+✓ Document which methods subclasses should override
+✓ Keep inheritance hierarchy shallow (2-3 levels)
+
+DON'T:
+✗ Use for everything - only when pattern genuinely applies
+✗ Make template method too complex
+✗ Create inheritance hierarchies that are too deep
+✗ NEVER allow subclass to override template method (use final)
+✗ Overload template method - breaks structure
+✗ Force subclasses to implement unneeded methods
+✗ Put business logic in abstract class (keeps it generic)
+
+DESIGN CHECKLIST:
+□ Is there a clear algorithm structure?
+□ Do different implementations share common steps?
+□ Are there invariant and variant parts?
+□ Can steps be clearly separated?
+□ Is the inheritance relationship clear?
+□ Can template method be final/sealed?
+□ Do all variations make sense?
+
+================================================================================
+11. ADVANTAGES vs DISADVANTAGES IN ACTION
+================================================================================
+
+CODE DUPLICATION PREVENTED:
+Without Template Method:
+  NeuralNetworkModel.train() = 100 lines (includes load, preprocess, evaluate, save)
+  DecisionTreeModel.train() = 100 lines (same code + different buildModel/trainModel)
+  RandomForestModel.train() = 100 lines (same code again!)
+  Total duplication: ~240 lines of repeated code
+
+With Template Method:
+  ModelTrainer.train() = 50 lines (common steps)
+  NeuralNetworkModel = 30 lines (only buildModel + trainModel)
+  DecisionTreeModel = 30 lines (only buildModel + trainModel)
+  RandomForestModel = 30 lines (only buildModel + trainModel)
+  Total: ~140 lines (significant reduction!)
+
+STRUCTURE GUARANTEED:
+Without: Each model could skip evaluateModel(), call saveModel() first, etc.
+With: All models GUARANTEE same order - loadData → preprocess → build → train → evaluate → save
+
+================================================================================
