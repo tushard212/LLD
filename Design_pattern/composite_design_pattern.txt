@@ -1,0 +1,789 @@
+================================================================================
+                    COMPOSITE DESIGN PATTERN
+================================================================================
+
+1. WHAT IS COMPOSITE DESIGN PATTERN?
+================================================================================
+The Composite Design Pattern lets you compose objects into tree structures to
+represent part-whole hierarchies. It allows clients to treat individual objects
+and compositions of objects uniformly.
+
+Think of it like a file system:
+  - Files: Individual components (leaf nodes)
+  - Folders: Composite of files and other folders
+  - Both files and folders have similar operations (delete, copy, getSize)
+  - Client treats them the same way, but folders recursively apply operations
+
+Components:
+- Component: Abstract interface for both leaves and containers
+- Leaf: Individual object (File) - no children
+- Composite: Container object (Folder) - has children (may be leaves or composites)
+- Client: Works with component interface uniformly
+
+================================================================================
+2. WHY WAS IT NEEDED?
+================================================================================
+Problems it solves:
+
+1. TREE-LIKE HIERARCHIES
+   - Real-world data often forms trees: files, organization charts, menus
+   - Need unified way to handle both leaves and branches
+   - Can't treat them differently without complex if-else logic
+
+2. CLIENT COMPLEXITY
+   - Without pattern, client code must check object type
+   - "Is this a file or folder?" - many type checks
+   - Different logic for files vs folders scattered throughout code
+
+3. RECURSIVE OPERATIONS
+   - Some operations naturally recursive (calculate folder size)
+   - Without pattern, need complex iteration and tracking
+   - Easy to miss edge cases
+
+4. FLEXIBILITY WITH STRUCTURE
+   - Real structures are deep and complex
+   - Need to treat all levels uniformly
+   - Adding operations shouldn't require changing all node types
+
+Example Problem (without Composite):
+```
+// Without pattern - complex and error-prone
+void calculateSize(Node* node) {
+    if (node->isFile()) {
+        File* file = (File*)node;
+        totalSize += file->getSize();
+    } else if (node->isFolder()) {
+        Folder* folder = (Folder*)node;
+        for (Node* child : folder->children) {
+            // Need to recursively handle this
+            calculateSize(child);  // Repeated logic
+        }
+    }
+}
+
+// Client code full of type checks
+if (isFile) {
+    delete fileObject;
+} else if (isFolder) {
+    // Recursively delete all children first
+    // Complex, error-prone
+}
+
+// Adding new operation? Must modify all node types
+```
+
+With Composite:
+```
+// Simple, uniform interface
+abstract class FileSystemNode {
+    abstract void delete();
+    abstract long getSize();
+}
+
+// Client code - NO TYPE CHECKS!
+void deleteRecursively(FileSystemNode node) {
+    node.delete();  // Works for both files and folders!
+}
+
+// Adding new operation? Just add method to component
+```
+
+================================================================================
+3. ADVANTAGES AND DISADVANTAGES
+================================================================================
+
+ADVANTAGES:
+===========
+✓ Simplicity: Clients treat all objects uniformly
+  - No type checking (isFile, isFolder, etc.)
+  - Single way to interact with hierarchy
+
+✓ Recursive Structure: Naturally fits tree hierarchies
+  - Part-whole relationships map directly to code
+  - Recursive operations elegant and intuitive
+
+✓ Open/Closed Principle: Easy to add new component types
+  - Add new leaf or composite without modifying existing code
+  - Create specialized node types (SymbolicLink, Archive, etc)
+
+✓ Flexibility: Build arbitrary tree structures at runtime
+  - Add/remove children dynamically
+  - No compile-time constraints on structure
+
+✓ Cleaner Code: Less conditional logic
+  - No instanceof or type casting
+  - Polymorphism handles differences
+
+✓ Natural Representation: Code mirrors real-world structure
+  - File system hierarchy in code matches actual hierarchy
+  - Easier to understand and maintain
+
+✓ Easy Testing: Can build small trees for unit tests
+  - Create simple test structures
+  - All components testable same way
+
+
+DISADVANTAGES:
+==============
+✗ Forced Uniformity: Leaf nodes inherit unnecessary methods
+  - File shouldn't need addChild() method
+  - Violates Interface Segregation Principle
+  - May throw "operation not supported" exceptions
+
+✗ Increased Complexity: More classes and interfaces
+  - Abstract component class
+  - Separate leaf and composite classes
+  - More code to understand
+
+✗ Performance Overhead: Recursive traversal is slower
+  - Tree traversal for every operation
+  - Can't optimize for simple cases
+  - Deep trees = many method calls
+
+✗ Type Safety Lost: Can't enforce "only folders here"
+  - Runtime errors if code tries to add file to file
+  - Check must be done at runtime, not compile-time
+
+✗ Memory Usage: References to children + overheads
+  - Each composite stores list of children
+  - Memory overhead for large trees
+
+✗ Difficulty with Constraints: Hard to enforce tree rules
+  - "Folder can't contain itself"
+  - "Max depth 5 levels"
+  - Must manually validate in client code
+
+✗ Operation Costs Vary: Different operations have different costs
+  - getSize() on deep tree slow, on single file fast
+  - Hard to optimize all cases
+
+================================================================================
+4. CLASS FLOW / ARCHITECTURE
+================================================================================
+
+        ┌─────────────────────────────────────┐
+        │  <<Interface/Abstract>>             │
+        │    FileSystemNode                   │
+        ├─────────────────────────────────────┤
+        │ + getName(): string                 │
+        │ + getSize(): long                   │
+        │ + delete()                          │
+        │ + copy(destination)                 │
+        │ + search(pattern)                   │
+        │ + getPath(): string                 │
+        └──────────────┬──────────────────────┘
+                       ▲
+        ┌──────────────┼──────────────┐
+        │              │              │
+   ┌────────────────┐  │    ┌─────────────────────────┐
+   │   File         │  │    │  Folder                 │
+   │  (LEAF)        │  │    │  (COMPOSITE)            │
+   ├────────────────┤  │    ├─────────────────────────┤
+   │ - name         │  │    │ - name                  │
+   │ - size         │  │    │ - children: List◄────┐  │
+   │ - content      │  │    │ - parent              │  │
+   ├────────────────┤  │    ├─────────────────────────┤
+   │ + getName()    │  │    │ + getName()             │
+   │ + getSize()    │  │    │ + getSize()  ◄─ recursive
+   │ + delete()     │  │    │ + add(child)            │
+   │ + copy()       │  │    │ + remove(child)         │
+   │ + search()     │  │    │ + delete()              │
+   │ + getPa...()   │  │    │ + copy()                │
+   └────────────────┘  │    │ + search()              │
+   (Concrete Leaf)     │    │ + getPath()             │
+                       │    └─────────────────────────┘
+                       │    (Concrete Composite)
+                       │
+                       └─ IMPLEMENTS
+
+FileSystem Tree Structure:
+=========================
+
+                    /root   (Folder)
+                   /    \
+                  /      \
+            /home  (F)   /etc  (F)
+             /  \         /  \
+        user  docs    passwd  config
+        (F)   (F)      (F)    (F)
+
+
+File
+  - Can't have children
+  - Leaf node
+  - Size = file size
+
+Folder
+  - Can have children (Files, Folders, or both)
+  - Composite node
+  - Size = sum of all children's sizes (recursive!)
+
+
+Client Interaction Flow:
+=======================
+
+Client requests: "Delete /root/home"
+         │
+         ▼
+    Folder.delete()
+         │
+         ├─► File.delete()  (user file)
+         ├─► File.delete()  (docs folder's contents)
+         │       ├─► file1
+         │       └─► file2
+         │
+         └─ All deletions happen recursively!
+            Client just calls one delete()!
+
+================================================================================
+5. COMPLETE C++ EXAMPLE: FILE SYSTEM WITH COMPOSITE PATTERN
+================================================================================
+
+#include <iostream>
+#include <string>
+#include <vector>
+#include <memory>
+#include <algorithm>
+using namespace std;
+
+// ============= ABSTRACT COMPONENT =============
+
+// Abstract base class for both files and folders
+class FileSystemNode {
+protected:
+    string name;
+    FileSystemNode* parent;
+
+public:
+    FileSystemNode(const string& n) : name(n), parent(nullptr) {}
+
+    virtual ~FileSystemNode() {}
+
+    // Common interface for both files and folders
+    virtual long getSize() const = 0;
+
+    virtual void display(const string& prefix = "") const = 0;
+
+    virtual void delete_node() {
+        // Base implementation - child override if needed
+        cout << "Deleting: " << name << endl;
+    }
+
+    virtual void copy(const string& destination) {
+        cout << "Copying " << name << " to " << destination << endl;
+    }
+
+    virtual void search(const string& pattern) = 0;
+
+    virtual bool isFolder() const = 0;
+
+    string getName() const { return name; }
+
+    void setParent(FileSystemNode* p) { parent = p; }
+
+    FileSystemNode* getParent() const { return parent; }
+
+    virtual string getPath() const {
+        if (parent == nullptr) return "/" + name;
+        return parent->getPath() + "/" + name;
+    }
+
+    // Virtual method for adding children (throws in Leaf)
+    virtual void add(shared_ptr<FileSystemNode> node) {
+        throw runtime_error("Cannot add children to a file!");
+    }
+
+    virtual void remove(shared_ptr<FileSystemNode> node) {
+        throw runtime_error("Cannot remove children from a file!");
+    }
+
+    virtual vector<shared_ptr<FileSystemNode>> getChildren() {
+        return vector<shared_ptr<FileSystemNode>>();
+    }
+};
+
+// ============= CONCRETE LEAF: FILE =============
+
+class File : public FileSystemNode {
+private:
+    long size;  // in bytes
+    string content;
+
+public:
+    File(const string& n, long s = 0)
+        : FileSystemNode(n), size(s), content("") {}
+
+    long getSize() const override {
+        return size;
+    }
+
+    void setContent(const string& c) {
+        content = c;
+        size = c.length();
+    }
+
+    string getContent() const {
+        return content;
+    }
+
+    void display(const string& prefix = "") const override {
+        cout << prefix << "📄 " << name
+             << " (" << size << " bytes)" << endl;
+    }
+
+    void search(const string& pattern) override {
+        if (name.find(pattern) != string::npos) {
+            cout << "Found file: " << getPath() << endl;
+        }
+        if (content.find(pattern) != string::npos) {
+            cout << "Pattern found in file: " << getPath() << endl;
+        }
+    }
+
+    void delete_node() override {
+        cout << "🗑️  Deleting file: " << getPath() << " (" << size << " bytes)" << endl;
+    }
+
+    void copy(const string& destination) override {
+        cout << "📋 Copying file " << getPath() << " to " << destination << endl;
+    }
+
+    bool isFolder() const override { return false; }
+};
+
+// ============= CONCRETE COMPOSITE: FOLDER =============
+
+class Folder : public FileSystemNode {
+private:
+    vector<shared_ptr<FileSystemNode>> children;
+
+public:
+    Folder(const string& n) : FileSystemNode(n) {}
+
+    virtual ~Folder() {
+        children.clear();
+    }
+
+    // Add child (file or folder)
+    void add(shared_ptr<FileSystemNode> node) override {
+        // Prevent circular references (simple check)
+        if (node.get() == this) {
+            throw runtime_error("Cannot add folder to itself!");
+        }
+
+        node->setParent(this);
+        children.push_back(node);
+        cout << "✓ Added '" << node->getName()
+             << "' to folder '" << name << "'" << endl;
+    }
+
+    // Remove child
+    void remove(shared_ptr<FileSystemNode> node) override {
+        auto it = find(children.begin(), children.end(), node);
+        if (it != children.end()) {
+            cout << "✓ Removed '" << node->getName()
+                 << "' from folder '" << name << "'" << endl;
+            children.erase(it);
+        }
+    }
+
+    vector<shared_ptr<FileSystemNode>> getChildren() override {
+        return children;
+    }
+
+    // Recursively calculate size of all contents
+    long getSize() const override {
+        long totalSize = 0;
+        for (const auto& child : children) {
+            totalSize += child->getSize();  // RECURSIVE!
+        }
+        return totalSize;
+    }
+
+    // Recursively display folder tree
+    void display(const string& prefix = "") const override {
+        cout << prefix << "📁 " << name << "/"
+             << " (" << getSize() << " bytes)" << endl;
+
+        string childPrefix = prefix + "  ";
+        for (const auto& child : children) {
+            child->display(childPrefix);
+        }
+    }
+
+    // Recursively search in all children
+    void search(const string& pattern) override {
+        if (name.find(pattern) != string::npos) {
+            cout << "Found folder: " << getPath() << endl;
+        }
+
+        // Search in all children RECURSIVELY
+        for (auto& child : children) {
+            child->search(pattern);
+        }
+    }
+
+    // Recursively delete all children
+    void delete_node() override {
+        cout << "🗑️  Deleting folder: " << getPath() << endl;
+
+        // Delete all children recursively
+        for (auto& child : children) {
+            child->delete_node();
+        }
+
+        children.clear();
+    }
+
+    // Recursively copy folder structure
+    void copy(const string& destination) override {
+        cout << "📋 Copying folder " << getPath()
+             << " to " << destination << endl;
+
+        for (auto& child : children) {
+            child->copy(destination + "/" + name);
+        }
+    }
+
+    bool isFolder() const override { return true; }
+
+    long getFileCount() const {
+        long count = 0;
+        for (const auto& child : children) {
+            if (!child->isFolder()) {
+                count++;
+            } else {
+                Folder* folder = (Folder*)child.get();
+                count += folder->getFileCount();
+            }
+        }
+        return count;
+    }
+
+    long getFolderCount() const {
+        long count = 1;  // count self
+        for (const auto& child : children) {
+            if (child->isFolder()) {
+                Folder* folder = (Folder*)child.get();
+                count += folder->getFolderCount();
+            }
+        }
+        return count;
+    }
+};
+
+// ============= CLIENT CODE =============
+
+int main() {
+    cout << "===== COMPOSITE DESIGN PATTERN EXAMPLE =====" << endl;
+    cout << "File System Hierarchy\n" << endl;
+
+    // ===--- Create file system structure ---===
+    cout << "--- Creating File System Structure ---\n" << endl;
+
+    auto root = make_shared<Folder>("root");
+
+    // /root/home folder
+    auto homeFolder = make_shared<Folder>("home");
+    root->add(homeFolder);
+
+    // /root/home/user folder
+    auto userFolder = make_shared<Folder>("user");
+    homeFolder->add(userFolder);
+
+    // Files in /root/home/user
+    auto resume = make_shared<File>("resume.pdf", 256);
+    auto cover = make_shared<File>("cover_letter.docx", 189);
+    userFolder->add(resume);
+    userFolder->add(cover);
+
+    // /root/documents folder
+    auto docsFolder = make_shared<Folder>("documents");
+    root->add(docsFolder);
+
+    auto doc1 = make_shared<File>("report.docx", 512);
+    auto doc2 = make_shared<File>("notes.txt", 128);
+    docsFolder->add(doc1);
+    docsFolder->add(doc2);
+
+    // /root/documents/projects subfolder
+    auto projectsFolder = make_shared<Folder>("projects");
+    docsFolder->add(projectsFolder);
+
+    auto proj1 = make_shared<File>("project1.cpp", 2048);
+    auto proj2 = make_shared<File>("project2.cpp", 3072);
+    projectsFolder->add(proj1);
+    projectsFolder->add(proj2);
+
+    // /root/media folder
+    auto mediaFolder = make_shared<Folder>("media");
+    root->add(mediaFolder);
+
+    auto photo1 = make_shared<File>("vacation.jpg", 4096);
+    auto photo2 = make_shared<File>("family.png", 5120);
+    mediaFolder->add(photo1);
+    mediaFolder->add(photo2);
+
+    // ===--- Scenario 1: Display entire tree ---===
+    cout << "\n--- Scenario 1: Display File System Tree ---\n" << endl;
+    root->display();
+
+    // ===--- Scenario 2: Get total size (RECURSIVE) ---===
+    cout << "\n--- Scenario 2: Calculate Total Size (Recursive) ---\n" << endl;
+    cout << "Total size of /root: " << root->getSize() << " bytes" << endl;
+    cout << "Total size of /root/home: " << homeFolder->getSize() << " bytes" << endl;
+    cout << "Total size of /root/documents: " << docsFolder->getSize() << " bytes" << endl;
+    cout << "Size of single file /root/documents/report.docx: "
+         << doc1->getSize() << " bytes" << endl;
+
+    // ===--- Scenario 3: Search recursively ---===
+    cout << "\n--- Scenario 3: Search for Pattern '.cpp' (Recursive) ---\n" << endl;
+    root->search(".cpp");
+
+    cout << "\n--- Scenario 3b: Search for 'documents' ---\n" << endl;
+    root->search("documents");
+
+    // ===--- Scenario 4: Delete folder (recursive) ---===
+    cout << "\n--- Scenario 4: Delete /root/media Folder ---\n" << endl;
+    mediaFolder->delete_node();
+
+    // ===--- Scenario 5: File system statistics ---===
+    cout << "\n--- Scenario 5: File System Statistics ---\n" << endl;
+    cout << "Total files: " << root->getFileCount() << endl;
+    cout << "Total folders: " << root->getFolderCount() << endl;
+
+    // ===--- Scenario 6: Display updated tree (after deletion) ---===
+    cout << "\n--- Scenario 6: Display Updated Tree (After Deletion) ---\n" << endl;
+    // Remove media folder from root
+    root->remove(mediaFolder);
+    root->display();
+
+    // ===--- Scenario 7: Copy operation ---===
+    cout << "\n--- Scenario 7: Copy /root/documents ---\n" << endl;
+    docsFolder->copy("/backup");
+
+    cout << "\n✓ Composite pattern benefits demonstrated:" << endl;
+    cout << "  • Same interface for files and folders" << endl;
+    cout << "  • Recursive operations (getSize, search, delete) work naturally" << endl;
+    cout << "  • No type checking needed - polymorphism handles it" << endl;
+    cout << "  • Can build arbitrary hierarchies at runtime" << endl;
+    cout << "  • Easy to add new file/folder types\n" << endl;
+
+    return 0;
+}
+
+================================================================================
+6. COMPARISON: WITH VS WITHOUT COMPOSITE
+================================================================================
+
+WITHOUT COMPOSITE PATTERN:
+==========================
+
+// Complex client code with type checks
+void deleteRecursive(Node* node) {
+    if (node->type == FILE) {
+        File* file = (File*)node;
+        cout << "Deleting file: " << file->name << endl;
+        delete file;
+    } else if (node->type == FOLDER) {
+        Folder* folder = (Folder*)node;
+        // Must manually iterate and delete children
+        for (Node* child : folder->children) {
+            deleteRecursive(child);  // Repetitive!
+        }
+        delete folder;
+    }
+}
+
+long calculateSize(Node* node) {
+    if (node->type == FILE) {
+        return ((File*)node)->size;
+    } else if (node->type == FOLDER) {
+        long total = 0;
+        for (Node* child : ((Folder*)node)->children) {
+            total += calculateSize(child);  // More repetition!
+        }
+        return total;
+    }
+}
+
+// Every operation requires these type checks!
+// Code is scattered, hard to maintain
+
+
+WITH COMPOSITE PATTERN:
+========================
+
+// Clean client code - no type checks!
+void deleteRecursive(FileSystemNode* node) {
+    node->delete_node();  // JUST ONE LINE!
+    // Polymorphism handles file vs folder
+}
+
+long calculateSize(FileSystemNode* node) {
+    return node->getSize();  // JUST ONE LINE!
+    // Folder overrides with recursive impl
+}
+
+// Adding new operation is easy
+void countFiles(FileSystemNode* node, int& count) {
+    if (!node->isFolder()) {
+        count++;
+    } else {
+        for (auto child : ((Folder*)node)->getChildren()) {
+            countFiles(child.get(), count);
+        }
+    }
+}
+
+================================================================================
+7. KEY CONCEPTS
+================================================================================
+
+TREE STRUCTURE:
+- Composite (Folder) contains Children (File or Folder)
+- Files are leaves (no children)
+- Folders are internal nodes
+
+RECURSIVE DEFINITION:
+- Composite is defined in terms of itself
+- Folder = name + list of FileSystemNode
+- FileSystemNode can be File or Folder
+
+COMMON INTERFACE:
+- All nodes implement FileSystemNode
+- getSize(), delete(), search(), etc.
+- Works same way on files and folders
+
+TRANSPARENCY:
+- Client doesn't need to know if it's file or folder
+- Treats all uniformly through base interface
+
+POLYMORPHIC OPERATIONS:
+- Different behavior through method overriding
+- File.getSize() = file size
+- Folder.getSize() = sum of children (recursive)
+
+LEAF vs COMPOSITE:
+- Leaf (File): terminal node, no children
+- Composite (Folder): can have children
+
+================================================================================
+8. REAL-WORLD APPLICATIONS
+================================================================================
+
+✓ File Systems
+  - Files and directories (example given)
+  - Each folder contains files and subfolders
+
+✓ GUI Component Trees
+  - Window (composite) contains Panels and Buttons
+  - Panel (composite) contains other components
+  - Button (leaf) standalone
+
+✓ Organization Hierarchies
+  - Department (composite) contains employees and subdepartments
+  - Employee (leaf) works in department
+
+✓ Web DOM (Document Object Model)
+  - HTML elements form tree
+  - Div (composite) contains paragraphs, other divs
+  - Text (leaf) inside elements
+
+✓ Graphics Systems
+  - Shape Group (composite) contains Shapes
+  - Shape (leaf) like Circle, Rectangle
+
+✓ Menu Systems
+  - Menu (composite) contains menu items and submenus
+  - MenuItem (leaf) has action
+
+✓ Company Structure
+  - Manager (composite) manages employees and other managers
+  - Employee (leaf) has no reports
+
+✓ Document Outlines
+  - Chapter (composite) contains sections and paragraphs
+  - Paragraph (leaf) contains text
+
+✓ Military Hierarchy
+  - Battalion (composite) contains companies
+  - Company (leaf) or Squad (composite)
+
+✓ Folder Structures in Any Application
+  - IDE project structure (folders of files)
+  - Cloud storage hierarchies
+  - Email folder trees
+
+================================================================================
+9. IMPLEMENTATION PATTERNS
+================================================================================
+
+PATTERN 1: SINGLE ABSTRACT CLASS
+================================
+class Component {
+    virtual void operation();
+};
+class Leaf : public Component { };
+class Composite : public Component { };
+
+PATTERN 2: LEAF WITH DUMMY METHODS
+===================================
+class Composite {
+    virtual void add(Composite* child) {}  // Leaf throws exception
+};
+
+PATTERN 3: TYPE-SAFE COMPOSITE
+===============================
+template<typename T>
+class Composite {
+    vector<T*> children;
+};
+// Only works if T has proper interface
+
+PATTERN 4: LAZY EVALUATION
+===========================
+// Don't load children until needed
+class Folder {
+    mutable vector<File*> children;
+    mutable bool childrenLoaded = false;
+
+    vector<File*> getChildren() {
+        if (!childrenLoaded) {
+            loadChildrenFromDisk();
+        }
+        return children;
+    }
+};
+
+================================================================================
+10. BEST PRACTICES
+================================================================================
+
+DO:
+✓ Use for true hierarchies (trees/graphs)
+✓ Define common interface clearly
+✓ Make component uniform for client
+✓ Use smart pointers for memory safety
+✓ Handle edge cases (circular references, etc)
+✓ Document what operations are supported
+✓ Keep single responsibility
+
+DON'T:
+✗ Force composite on flat structures
+✗ Add leaf-only methods to composite
+✗ Keep state in multiple places (size)
+✗ Forget to handle edge cases
+✗ Make composite too complex
+✗ Use when client needs type info
+✗ Allow circular references without checks
+
+DESIGN CHECKLIST:
+□ Do I have part-whole hierarchy?
+□ Can parts contain other parts recursively?
+□ Should client treat all uniformly?
+□ Are operations naturally recursive?
+□ Will code be simpler without pattern?
+□ Can I enforce tree constraints?
+
+================================================================================
