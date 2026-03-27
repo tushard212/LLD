@@ -1,0 +1,831 @@
+================================================================================
+                       PROXY DESIGN PATTERN
+================================================================================
+
+1. WHAT IS PROXY DESIGN PATTERN?
+================================================================================
+The Proxy Design Pattern provides a surrogate or placeholder for another object
+to control access to it. A proxy is essentially a wrapper that sits between the
+client and the real object.
+
+Think of it like a real-life scenario:
+  - You want to call a celebrity (real object)
+  - You can't call directly - you call their agent (proxy)
+  - Agent controls when you reach the celebrity
+  - Agent can refuse, delay, or redirect your call
+
+Components:
+- Subject: Interface that both proxy and real object implement
+- RealSubject: Actual expensive/sensitive object
+- Proxy: Controls access to RealSubject
+- Client: Uses proxy without knowing if it's real object or proxy
+
+THREE TYPES OF PROXY:
+====================
+1. VIRTUAL PROXY: Lazy initialization (delays expensive object creation)
+2. PROTECTION PROXY: Access control (controls who can use object)
+3. REMOTE PROXY: Remote access (represents object in different address space)
+
+================================================================================
+2. WHY WAS IT NEEDED?
+================================================================================
+Problems it solves:
+
+1. EXPENSIVE OBJECT CREATION
+   - Some objects are expensive to initialize (large images, DB connections)
+   - May not be needed immediately or at all
+   - Delay creation until actually needed
+
+2. ACCESS CONTROL
+   - Want to restrict who can access certain objects
+   - Need permission checking before operations
+   - Can't modify original object to add access control
+
+3. REMOTE OBJECT ACCESS
+   - Object lives in different process/server
+   - Need transparent access to remote objects
+   - Network communication hidden from client
+
+4. MONITORING / LOGGING
+   - Want to log all accesses to an object
+   - Monitor usage patterns
+   - Can't modify original object
+
+5. LAZY LOADING
+   - Load complex objects only when needed
+   - Improve application startup time
+   - Reduce memory usage
+
+Example Problem (without Proxy):
+```
+// Without proxy - expensive object created immediately
+class Image {
+    Image(string filename) {
+        // Load entire image from disk - SLOW!
+        // Might never be displayed!
+        cout << "Loading " << filename << " from disk..." << endl;
+        // Entire image in memory, whether we use it or not
+    }
+    void display() { /* ... */ }
+};
+
+int main() {
+    Image img("large_photo.jpg");  // IMMEDIATELY loads, even if not displayed yet
+    // If we don't display, it was wasteful!
+}
+```
+
+With Proxy:
+```
+// With proxy - delay loading until needed
+class ImageProxy {
+    Image* realImage = nullptr;
+    string filename;
+
+    Image* getRealImage() {
+        if (realImage == nullptr) {
+            realImage = new Image(filename);  // Load NOW, when needed
+        }
+        return realImage;
+    }
+
+    void display() {
+        getRealImage()->display();  // Loads only when displayed
+    }
+};
+
+int main() {
+    ImageProxy img("large_photo.jpg");  // Quick! No loading yet
+    // If we never call display(), image never loads - efficient!
+}
+```
+
+================================================================================
+3. ADVANTAGES AND DISADVANTAGES
+================================================================================
+
+ADVANTAGES:
+===========
+✓ Lazy Initialization: Expensive objects created only when needed
+  - Faster application startup
+  - Reduced memory usage
+  - Objects created on-demand
+
+✓ Access Control: Fine-grained control over object access
+  - Permission checking
+  - Authentication/authorization
+  - Can deny access to unauthorized users
+
+✓ Remote Access: Transparent access to remote objects
+  - Hide network complexity
+  - Client code unchanged
+  - Network calls hidden
+
+✓ Monitoring and Logging: Track all accesses
+  - Log who accessed what and when
+  - Monitor performance
+  - Audit trail for security
+
+✓ Reference Counting: Can track object usage
+  - Know when object is safe to delete
+  - Manage resource lifecycle
+
+✓ Caching: Can cache results
+  - Store expensive computation results
+  - Return cached data for repeated accesses
+  - Improve performance
+
+✓ Original Object Unchanged: Can add functionality without modifying it
+  - Proxy adds features without touching real object
+  - Open/Closed Principle
+
+✓ Smart References: Proxy can be reference-counted
+  - Automatic cleanup
+  - Memory management
+
+DISADVANTAGES:
+==============
+✗ Added Complexity: Extra layer of indirection
+  - More classes to understand
+  - Harder to debug
+  - Call stack becomes deeper
+
+✗ Performance Overhead: Extra method calls and checks
+  - Access checking adds latency
+  - Network calls (remote proxy) can be slow
+  - Monitoring adds overhead
+
+✗ Inconsistent Behavior: Proxy might not match real object exactly
+  - Some operations might not be supported
+  - Different error handling
+  - Subtle behavior differences
+
+✗ Thread Safety Issues: Needs careful synchronization
+  - Multiple threads accessing proxy
+  - Race conditions possible
+  - Locks add complexity
+
+✗ Hidden Costs: Performance impact not obvious
+  - Network delays hidden in proxy
+  - Client doesn't realize expensive operations happening
+  - Easy to accidentally write inefficient code
+
+✗ Memory Usage: Proxy holds references
+  - Extra memory for proxy objects
+  - Caching uses additional memory
+  - Can consume more memory than direct access
+
+✗ Increased Coupling: Client couples to proxy interface
+  - If proxy interface changes, client breaks
+  - Still creates dependency
+
+✗ Debugging Difficulty: Hard to trace real issue
+  - Is problem in proxy or real object?
+  - Network issues hidden
+  - Logging/monitoring can obscure actual problem
+
+================================================================================
+4. THREE TYPES OF PROXY WITH EXAMPLES
+================================================================================
+
+TYPE 1: VIRTUAL PROXY (Lazy Initialization)
+============================================
+Problem: Image loading is expensive, might not be displayed
+Solution: Create placeholder, load real image only when display() called
+
+Benefits:
+  • Fast initialization
+  • Reduced memory (unused images not loaded)
+  • Better application startup time
+
+Example: Image viewer app - load thumbnails, real images on demand
+
+
+TYPE 2: PROTECTION PROXY (Access Control)
+===========================================
+Problem: Some operations should only be allowed to certain users
+Solution: Proxy checks permissions before delegating to real object
+
+Benefits:
+  • Fine-grained access control
+  • Authentication/authorization
+  • Audit trail
+
+Example: Database access - only authenticated users can query
+
+
+TYPE 3: REMOTE PROXY (Remote Access)
+=====================================
+Problem: Object lives on remote server
+Solution: Local proxy handles network communication transparently
+
+Benefits:
+  • Transparent remote access
+  • Hide network complexity
+  • Local reference to remote object
+
+Example: Downloading image from server - proxy fetches, client sees local image
+
+================================================================================
+5. CLASS FLOW / ARCHITECTURE
+================================================================================
+
+        ┌──────────────────────────────────────┐
+        │  <<Interface>>                       │
+        │      Image                           │
+        ├──────────────────────────────────────┤
+        │ + display(): void                    │
+        │ + getWidth(): int                    │
+        │ + getHeight(): int                   │
+        └──────────────┬───────────────────────┘
+                       △
+        ┌──────────────┼──────────────┬────────────┐
+        │              │              │            │
+   ┌─────────────┐ ┌──────────────┐ ┌────────────────┐
+   │RealImage    │ │VirtualProxy  │ │ProtectionProxy│
+   │(SUBJECT)    │ │(lazy loading)│ │(access control│
+   ├─────────────┤ ├──────────────┤ ├────────────────┤
+   │ - pixels[]  │ │- realImage   │ │ - realImage    │
+   │ - width     │ │- filename    │ │ - user         │
+   │ - height    │ │ - loaded     │ │ - permissions  │
+   ├─────────────┤ ├──────────────┤ ├────────────────┤
+   │ + display() │ │ + display()  │ │ + display()    │
+   │ + getWidth()│ │ + getWidth() │ │ + getWidth()   │
+   │ + getHeight│ │ + getHeight()│ │ + getHeight()  │
+   └─────────────┘ └──────────────┘ └────────────────┘
+   (Loads from    (Creates real    (Checks
+    disk)         only on demand)   permissions)
+
+                    VIRTUAL PROXY FLOW:
+                    ==================
+    Client calls: proxy.display()
+           │
+           ▼
+    ┌──────────────────────────┐
+    │ VirtualProxy.display()   │
+    │                          │
+    │ if realImage == null {   │
+    │   realImage = load()     │  ◄─ LAZY LOADING
+    │ }                        │
+    └──────────────────────────┘
+           │
+           ▼
+    realImage.display()
+           │
+           ▼
+    RealImage renders image
+
+
+                    PROTECTION PROXY FLOW:
+                    =====================
+    Client calls: proxy.display()
+           │
+           ▼
+    ┌──────────────────────────┐
+    │ ProtectionProxy.display()│
+    │                          │
+    │ if (user.hasAccess()) {  │  ◄─ ACCESS CONTROL
+    │   realImage.display()    │
+    │ } else {                 │
+    │   throw Exception()      │
+    │ }                        │
+    └──────────────────────────┘
+
+
+                    REMOTE PROXY FLOW:
+                    ==================
+    Client:          Server:
+       │                │
+       ├─ display() ────┤
+       │     request    │
+       │                ├─ load image
+       │                ├─ compress
+       │  ◄─ response ──┤
+       │     image      │
+       │                │
+    display image
+
+
+================================================================================
+6. COMPLETE C++ EXAMPLE: IMAGE PROXY WITH 3 TYPES
+================================================================================
+
+#include <iostream>
+#include <string>
+#include <memory>
+#include <map>
+#include <vector>
+#include <thread>
+#include <chrono>
+using namespace std;
+
+// ============= SUBJECT INTERFACE =============
+
+class Image {
+public:
+    virtual ~Image() {}
+    virtual void display() = 0;
+    virtual int getWidth() const = 0;
+    virtual int getHeight() const = 0;
+    virtual string getFilename() const = 0;
+};
+
+// ============= REAL SUBJECT =============
+
+class RealImage : public Image {
+private:
+    string filename;
+    string pixelData;
+    int width = 0;
+    int height = 0;
+
+public:
+    RealImage(const string& f) : filename(f) {
+        // Simulate expensive image loading from disk
+        cout << "[RealImage] Loading image: " << f << endl;
+        this_thread::sleep_for(chrono::milliseconds(500));  // Simulate disk I/O
+        cout << "[RealImage] ✓ Image loaded successfully" << endl;
+
+        // Simulate loading image data
+        width = 800;
+        height = 600;
+        pixelData = "Image data for " + f;
+    }
+
+    void display() override {
+        cout << "[RealImage] Displaying image: " << filename
+             << " (" << width << "x" << height << ")" << endl;
+    }
+
+    int getWidth() const override { return width; }
+
+    int getHeight() const override { return height; }
+
+    string getFilename() const override { return filename; }
+};
+
+// ============= TYPE 1: VIRTUAL PROXY (Lazy Initialization) =============
+
+class VirtualImageProxy : public Image {
+private:
+    string filename;
+    mutable shared_ptr<RealImage> realImage;
+
+    // Lazy getter
+    shared_ptr<RealImage> getRealImage() const {
+        if (!realImage) {
+            cout << "[VirtualProxy] Creating real image on first use..." << endl;
+            realImage = make_shared<RealImage>(filename);
+        }
+        return realImage;
+    }
+
+public:
+    VirtualImageProxy(const string& f) : filename(f) {
+        cout << "[VirtualProxy] Proxy created (image NOT loaded yet)" << endl;
+    }
+
+    void display() override {
+        cout << "[VirtualProxy] Delegating display() to real image..." << endl;
+        getRealImage()->display();
+    }
+
+    int getWidth() const override {
+        cout << "[VirtualProxy] Delegating getWidth() to real image..." << endl;
+        return getRealImage()->getWidth();
+    }
+
+    int getHeight() const override {
+        cout << "[VirtualProxy] Delegating getHeight() to real image..." << endl;
+        return getRealImage()->getHeight();
+    }
+
+    string getFilename() const override { return filename; }
+
+    bool isLoaded() const { return realImage != nullptr; }
+};
+
+// ============= TYPE 2: PROTECTION PROXY (Access Control) =============
+
+class User {
+private:
+    string username;
+    vector<string> permissions;
+
+public:
+    User(const string& u, vector<string> perms)
+        : username(u), permissions(perms) {}
+
+    bool hasPermission(const string& perm) const {
+        for (const auto& p : permissions) {
+            if (p == perm) return true;
+        }
+        return false;
+    }
+
+    string getUsername() const { return username; }
+};
+
+class ProtectionImageProxy : public Image {
+private:
+    shared_ptr<RealImage> realImage;
+    shared_ptr<User> currentUser;
+    string filename;
+
+public:
+    ProtectionImageProxy(const string& f, shared_ptr<User> user)
+        : filename(f), currentUser(user) {
+        realImage = make_shared<RealImage>(f);
+        cout << "[ProtectionProxy] Proxy created for user: "
+             << user->getUsername() << endl;
+    }
+
+    void display() override {
+        if (currentUser->hasPermission("VIEW")) {
+            cout << "[ProtectionProxy] ✓ User has VIEW permission" << endl;
+            realImage->display();
+        } else {
+            cout << "[ProtectionProxy] ✗ ACCESS DENIED: User lacks VIEW permission" << endl;
+        }
+    }
+
+    int getWidth() const override {
+        if (currentUser->hasPermission("VIEW")) {
+            return realImage->getWidth();
+        } else {
+            cout << "[ProtectionProxy] ✗ ACCESS DENIED: User lacks VIEW permission" << endl;
+            return 0;
+        }
+    }
+
+    int getHeight() const override {
+        if (currentUser->hasPermission("VIEW")) {
+            return realImage->getHeight();
+        } else {
+            cout << "[ProtectionProxy] ✗ ACCESS DENIED: User lacks VIEW permission" << endl;
+            return 0;
+        }
+    }
+
+    string getFilename() const override { return filename; }
+};
+
+// ============= TYPE 3: REMOTE PROXY (Remote Access Simulation) =============
+
+class RemoteImageProxy : public Image {
+private:
+    string filename;
+    string serverAddress;
+    bool cached = false;
+    mutable string cachedImageData;
+
+    string fetchFromServer() {
+        cout << "[RemoteProxy] Connecting to server: " << serverAddress << endl;
+        this_thread::sleep_for(chrono::milliseconds(800));  // Network latency
+        cout << "[RemoteProxy] ✓ Connected" << endl;
+
+        cout << "[RemoteProxy] Requesting image: " << filename << endl;
+        this_thread::sleep_for(chrono::milliseconds(600));  // Download time
+        cout << "[RemoteProxy] ✓ Image downloaded" << endl;
+
+        cached = true;
+        return "Remote image data for " + filename;
+    }
+
+public:
+    RemoteImageProxy(const string& f, const string& server)
+        : filename(f), serverAddress(server) {
+        cout << "[RemoteProxy] Proxy created for remote image: " << f << endl;
+        cout << "[RemoteProxy] Server: " << serverAddress << endl;
+    }
+
+    void display() override {
+        cout << "[RemoteProxy] Displaying remote image..." << endl;
+
+        if (!cached) {
+            cachedImageData = fetchFromServer();
+        } else {
+            cout << "[RemoteProxy] ✓ Using cached image (fast!)" << endl;
+        }
+
+        cout << "[RemoteProxy] Image displayed: " << filename << endl;
+    }
+
+    int getWidth() const override {
+        return 1024;  // Simulated remote image dimensions
+    }
+
+    int getHeight() const override {
+        return 768;
+    }
+
+    string getFilename() const override { return filename; }
+};
+
+// ============= CLIENT CODE =============
+
+int main() {
+    cout << "===== PROXY DESIGN PATTERN EXAMPLE =====" << endl;
+    cout << "Three Types of Proxy with Image Display\n" << endl;
+
+    // ===--- TYPE 1: VIRTUAL PROXY (Lazy Initialization) ---===
+    cout << "\n" << string(70, '=') << endl;
+    cout << "TYPE 1: VIRTUAL PROXY (Lazy Initialization)" << endl;
+    cout << string(70, '=') << "\n" << endl;
+
+    cout << "--- Creating Virtual Proxy ---" << endl;
+    auto proxy1 = make_shared<VirtualImageProxy>("photo1.jpg");
+    cout << "✓ Virtual proxy created" << endl;
+    cout << "✓ Real image NOT loaded yet\n" << endl;
+
+    cout << "--- First access to image ---" << endl;
+    proxy1->display();
+    cout << "✓ Image loaded on-demand\n" << endl;
+
+    cout << "--- Second access to image ---" << endl;
+    proxy1->display();
+    cout << "✓ No loading needed (already loaded)\n" << endl;
+
+    // ===--- TYPE 2: PROTECTION PROXY (Access Control) ---===
+    cout << string(70, '=') << endl;
+    cout << "TYPE 2: PROTECTION PROXY (Access Control)" << endl;
+    cout << string(70, '=') << "\n" << endl;
+
+    cout << "--- User with VIEW permission ---" << endl;
+    auto admin = make_shared<User>("admin", vector<string>{"VIEW", "EDIT", "DELETE"});
+    auto protectedProxy1 = make_shared<ProtectionImageProxy>("secret.jpg", admin);
+    cout << endl;
+
+    cout << "Attempting to display:" << endl;
+    protectedProxy1->display();
+    cout << endl;
+
+    cout << "--- User without VIEW permission ---" << endl;
+    auto guestUser = make_shared<User>("guest", vector<string>{"DOWNLOAD"});
+    auto protectedProxy2 = make_shared<ProtectionImageProxy>("confidential.jpg", guestUser);
+    cout << endl;
+
+    cout << "Attempting to display:" << endl;
+    protectedProxy2->display();
+    cout << "✓ Access denied as expected\n" << endl;
+
+    // ===--- TYPE 3: REMOTE PROXY (Remote Access) ---===
+    cout << string(70, '=') << endl;
+    cout << "TYPE 3: REMOTE PROXY (Remote Access)" << endl;
+    cout << string(70, '=') << "\n" << endl;
+
+    cout << "--- Creating Remote Proxy ---" << endl;
+    auto remoteProxy = make_shared<RemoteImageProxy>("mountain.jpg", "192.168.1.100");
+    cout << "✓ Remote proxy created (no network access yet)\n" << endl;
+
+    cout << "--- First access (network fetch) ---" << endl;
+    remoteProxy->display();
+    cout << "✓ Image downloaded from remote server\n" << endl;
+
+    cout << "--- Second access (from cache) ---" << endl;
+    remoteProxy->display();
+    cout << "✓ Image retrieved from cache (faster)\n" << endl;
+
+    // ===--- COMPARISON ---===
+    cout << string(70, '=') << endl;
+    cout << "PROXY PATTERN BENEFITS DEMONSTRATED" << endl;
+    cout << string(70, '=') << "\n" << endl;
+
+    cout << "VIRTUAL PROXY:" << endl;
+    cout << "  ✓ Lazy initialization - image loaded only when needed" << endl;
+    cout << "  ✓ Fast proxy creation - no loading overhead" << endl;
+    cout << "  ✓ Memory efficient - unused images not loaded\n" << endl;
+
+    cout << "PROTECTION PROXY:" << endl;
+    cout << "  ✓ Access control - prevents unauthorized access" << endl;
+    cout << "  ✓ Permission checking - enforced at proxy level" << endl;
+    cout << "  ✓ Audit trail - can log all access attempts\n" << endl;
+
+    cout << "REMOTE PROXY:" << endl;
+    cout << "  ✓ Transparent remote access - client unaware of network" << endl;
+    cout << "  ✓ Caching - reduces repeated network calls" << endl;
+    cout << "  ✓ Hide complexity - network details handled by proxy\n" << endl;
+
+    cout << string(70, '=') << endl;
+    cout << "KEY TAKEAWAYS:" << endl;
+    cout << "✓ All three proxies implement same Image interface" << endl;
+    cout << "✓ Client uses proxies same way as real objects" << endl;
+    cout << "✓ Proxy acts as mediator between client and real object" << endl;
+    cout << "✓ Different proxy types solve different problems" << endl;
+    cout << string(70, '=') << "\n" << endl;
+
+    return 0;
+}
+
+================================================================================
+7. COMPARISON: VIRTUAL PROXY vs LAZY EVALUATION vs DECORATOR
+================================================================================
+
+VIRTUAL PROXY vs LAZY EVALUATION:
+=================================
+Virtual Proxy:
+  - Delays object creation
+  - Transparent - client doesn't know
+  - Implements subject interface
+
+Lazy Evaluation:
+  - Functional approach
+  - Explicit delay
+  - Returns thunk/closure
+
+Virtual Proxy is object-oriented lazy evaluation
+
+
+VIRTUAL PROXY vs DECORATOR:
+===========================
+Virtual Proxy:
+  - Delays creation of wrapped object
+  - Same interface as wrapped object
+  - One-to-one relationship
+
+Decorator:
+  - Adds behavior to existing object
+  - Object already exists
+  - Can stack multiple decorators
+
+Virtual Proxy: Lazy creation
+Decorator: Adding functionality
+
+
+PROTECTION PROXY vs BRIDGE:
+============================
+Protection Proxy:
+  - Controls access
+  - Implements same interface
+
+Bridge:
+  - Separates abstraction from implementation
+  - Different purpose
+
+Both use composition, different intents
+
+================================================================================
+8. WHEN TO USE EACH PROXY TYPE
+================================================================================
+
+USE VIRTUAL PROXY WHEN:
+✓ Object creation is expensive (large files, complex calculations)
+✓ Object might not be used at all
+✓ Want fast initialization
+✓ Need lazy loading
+✓ Memory is limited
+
+Examples:
+  - Loading large images on-demand
+  - Database connections (connect only when needed)
+  - Heavy computations (calculate only when accessed)
+  - Web page assets (load images only when scrolled into view)
+
+
+USE PROTECTION PROXY WHEN:
+✓ Need access control
+✓ Object is sensitive (data, resources, operations)
+✓ Different users have different permissions
+✓ Need authentication/authorization
+✓ Want audit trail
+
+Examples:
+  - Database access control
+  - File system access (read/write permissions)
+  - API endpoints (role-based access)
+  - Sensitive data (encrypted access)
+
+
+USE REMOTE PROXY WHEN:
+✓ Object lives in different process/machine
+✓ Need transparent remote access
+✓ Want to hide network complexity
+✓ Need to cache remote calls
+✓ Have high latency
+
+Examples:
+  - Accessing remote APIs
+  - Distributed systems
+  - Client-server applications
+  - Cloud services
+  - RPC (Remote Procedure Call)
+
+================================================================================
+9. REAL-WORLD APPLICATIONS
+================================================================================
+
+VIRTUAL PROXY:
+✓ Image loading in web browsers and galleries
+✓ Lazy-loading in ORM frameworks (Hibernate)
+✓ Virtual memory management
+✓ On-demand resource allocation
+✓ Placeholder images before real images load
+✓ Progressive loading in applications
+
+PROTECTION PROXY:
+✓ Database access control
+✓ File system permissions
+✓ API authentication
+✓ Permission-based view access
+✓ Sensitive data encryption
+✓ Employee records access control
+
+REMOTE PROXY:
+✓ RPC (Remote Procedure Call) stubs
+✓ Web service proxies
+✓ REST client wrappers
+✓ RMI (Remote Method Invocation) in Java
+✓ Socket communication wrappers
+✓ Distributed cache proxies
+
+================================================================================
+10. IMPLEMENTATION PATTERNS
+================================================================================
+
+PATTERN 1: VIRTUAL PROXY WITH SMART POINTER
+============================================
+class VirtualProxy {
+private:
+    mutable unique_ptr<RealSubject> real;
+    RealSubject* getReal() const {
+        if (!real) real = make_unique<RealSubject>();
+        return real.get();
+    }
+};
+
+PATTERN 2: PROTECTION PROXY WITH EXCEPTIONS
+=============================================
+class ProtectionProxy {
+    void operation() {
+        if (!hasAccess()) {
+            throw AccessDeniedException();
+        }
+        real->operation();
+    }
+};
+
+PATTERN 3: REMOTE PROXY WITH CACHING
+=====================================
+class RemoteProxy {
+private:
+    mutable map<string, Result> cache;
+
+    Result operation(string key) {
+        if (cache.find(key) != cache.end()) {
+            return cache[key];  // Return cached
+        }
+        Result r = fetchRemote(key);
+        cache[key] = r;  // Cache new result
+        return r;
+    }
+};
+
+================================================================================
+11. BEST PRACTICES
+================================================================================
+
+DO:
+✓ Proxy and RealSubject implement same interface
+✓ Keep proxy logic simple and focused
+✓ Document proxy type and purpose
+✓ Handle threading for multi-threaded access
+✓ Cache results when appropriate
+✓ Clean up resources properly
+✓ Make proxy transparent to client
+
+DON'T:
+✗ Change interface (breaks transparency)
+✗ Add logic that should be in real object
+✗ Forget to handle exceptions
+✗ Leave resources open (especially remote proxy)
+✗ Make proxy too complex
+✗ Mix proxy types inappropriately
+✗ Ignore thread safety issues
+
+DESIGN CHECKLIST:
+□ Is proxy transparent to client?
+□ Does proxy implement subject interface?
+□ Is proxy type appropriate for problem?
+□ Are resources managed properly?
+□ Is thread safety handled?
+□ Is performance acceptable?
+□ Are exceptions handled correctly?
+
+================================================================================
+12. COMPARISON TABLE
+================================================================================
+
+┌─────────────────┬──────────────┬──────────────┬──────────────┐
+│ Aspect          │ Virtual      │ Protection   │ Remote       │
+├─────────────────┼──────────────┼──────────────┼──────────────┤
+│ Purpose         │ Lazy init    │ Access ctrl  │ Remote access│
+│ When created    │ On demand    │ Immediately  │ Immediately  │
+│ Overhead        │ Minimal      │ Permission   │ Network      │
+│ Thread safe     │ Careful      │ Yes          │ Yes          │
+│ Caching         │ N/A          │ Sometimes    │ Usually      │
+│ Complexity      │ Low          │ Medium       │ High         │
+│ Use case        │ Expensive    │ Sensitive    │ Distributed  │
+│ Example         │ Big image    │ Database     │ Web service  │
+└─────────────────┴──────────────┴──────────────┴──────────────┘
+
+================================================================================
