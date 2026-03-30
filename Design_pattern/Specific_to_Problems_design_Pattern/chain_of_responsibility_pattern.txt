@@ -1,0 +1,794 @@
+================================================================================
+                 CHAIN OF RESPONSIBILITY DESIGN PATTERN
+================================================================================
+
+1. WHAT IS CHAIN OF RESPONSIBILITY DESIGN PATTERN?
+================================================================================
+The Chain of Responsibility Design Pattern passes requests along a chain of
+handlers. Each handler decides whether to process the request or pass it to
+the next handler in the chain.
+
+Think of it like a real-world scenario:
+  - Customer submits complaint to Level 1 support
+  - If Level 1 can't solve, it passes to Level 2
+  - If Level 2 can't solve, it passes to Level 3 (manager)
+  - Each handler can either handle it or pass it along
+
+Components:
+- Handler: Defines interface for handling requests
+- ConcreteHandler: Implements handler, processes or passes to next
+- Request: The thing being processed
+- Client: Initiates request
+- Chain: One or more handlers linked together
+
+================================================================================
+2. WHY WAS IT NEEDED?
+================================================================================
+Problems it solves:
+
+1. MULTIPLE POSSIBLE HANDLERS
+   - Request might be handled by different objects
+   - Don't know in advance which handler should process it
+   - Don't want to hardcode decision logic in code
+
+2. SEQUENTIAL PROCESSING
+   - Request needs to go through multiple checks/validations
+   - Each handler does one validation/transformation
+   - Pass to next if current can't handle
+
+3. LOOSE COUPLING
+   - Sender doesn't know which handler will process request
+   - Handlers don't know about each other
+   - Easy to add/remove handlers without changing code
+
+4. DYNAMIC CHAIN BUILDING
+   - Chain can be built at runtime
+   - Different chains for different scenarios
+   - Easy to reorder handlers
+
+5. SINGLE RESPONSIBILITY
+   - Each handler does one specific thing
+   - Not responsible for knowing about other handlers
+   - Easy to understand each handler
+
+Example Problem (without Chain of Responsibility):
+```
+// Without pattern - hardcoded decision logic everywhere
+class ATMWithdrawal {
+    void withdraw(int amount) {
+        if (amount % 100 == 0) {
+            dispense100Notes(amount / 100);
+        } else if (amount % 50 == 0) {
+            dispense100Notes(amount / 100);
+            amount = amount % 100;
+            if (amount >= 50) dispense50Notes(amount / 50);
+        } else if (amount % 20 == 0) {
+            // Complex logic for all combinations
+            // Hard to maintain!
+            // Hard to add new denominations!
+        }
+        // ...more hardcoded logic...
+    }
+};
+
+// Problems:
+// • Tight coupling - ATM knows all denominations
+// • Hard to add new denomination (modify ATM class!)
+// • Violates Open/Closed Principle
+// • Complex if-else chain
+```
+
+With Chain of Responsibility:
+```
+abstract class DenominationHandler {
+    DenominationHandler* next;
+
+    void withdraw(int amount) {
+        if (canDispense(amount)) {
+            dispense(amount);
+        } else if (next) {
+            next->withdraw(amount);  // Pass to next handler
+        }
+    }
+
+    abstract void dispense(int amount);
+};
+
+class Hundred : public DenominationHandler {
+    void dispense(int amount) {
+        cout << "Dispensing " << (amount/100) << " hundred dollar notes" << endl;
+    }
+};
+
+// Simple! Each handler only knows about one denomination
+// Easy to add new denominations
+// Handlers don't know about each other
+```
+
+================================================================================
+3. ADVANTAGES AND DISADVANTAGES
+================================================================================
+
+ADVANTAGES:
+===========
+✓ Loose Coupling: Sender doesn't know about handlers
+  - No knowledge of concrete handler classes
+  - Easy to change handler chain
+  - Handler order can change without affecting sender
+
+✓ Single Responsibility: Each handler has one job
+  - Each handler does one specific thing
+  - Easy to understand and test
+  - Focused responsibility
+
+✓ Open/Closed Principle: Easy to add new handlers
+  - Add new handler without modifying existing ones
+  - Just insert it in the chain
+  - No changes to sender code
+
+✓ Dynamic Chain Building: Chain can be built at runtime
+  - Different chains for different scenarios
+  - Can reorder/remove handlers dynamically
+  - Flexible to changing requirements
+
+✓ Request Encapsulation: Request is object
+  - Can attach metadata to request
+  - Request can be logged, queued, etc.
+  - Separates request from processing
+
+✓ Separation of Concerns: Each handler independent
+  - Handlers don't know about each other
+  - Easy to test each handler in isolation
+  - Reusable handlers in different chains
+
+✓ Implicit Broadcast: Multiple handlers can process
+  - Request can go through multiple handlers
+  - Each can do its part
+  - Flexible processing pipeline
+
+DISADVANTAGES:
+==============
+✗ Request Might Not Be Handled: No guarantee
+  - If no handler in chain can handle, request ignored
+  - Might be hard to detect unhandled requests
+  - Need default handling or error mechanism
+
+✗ Reduced Performance: Extra method calls
+  - Request passes through multiple handlers
+  - Each handler checks if it can handle
+  - Performance overhead for large chains
+
+✗ Hard to Debug: Difficult to trace execution
+  - Don't know which handler will process
+  - If request fails, which handler caused it?
+  - Execution path not obvious
+
+✗ Hard to Understand: Implicit flow control
+  - Where request goes is not explicit
+  - Must follow chain to understand
+  - Code isn't self-documenting
+
+✗ Chain Management: Chain must be set up correctly
+  - If chain not built properly, request lost
+  - Null pointer exceptions if chain broken
+  - Complex to maintain large chains
+
+✗ Unexpected Behavior: Handler order matters
+  - Changing order can change results
+  - Handler might consume request prematurely
+  - Easy to have unintended consequences
+
+✗ Debugging Difficulty: Hard to trace why request failed
+  - Which handler didn't handle it?
+  - Why did handler pass instead of process?
+  - Need detailed logging to debug
+
+✗ Performance Overhead: All handlers checked
+  - Even if first handler handles, all are created
+  - No short-circuit optimization
+  - Can be slow for large chains
+
+================================================================================
+4. CLASS FLOW / ARCHITECTURE
+================================================================================
+
+        ┌────────────────────────────────────────────┐
+        │  <<Abstract>>                              │
+        │   RequestHandler                           │
+        ├────────────────────────────────────────────┤
+        │ # next: RequestHandler*                    │
+        │                                            │
+        ├────────────────────────────────────────────┤
+        │ + setNext(handler): void                   │
+        │ + handle(request): void                    │
+        ├────────────────────────────────────────────┤
+        │ # abstract process(request): void          │
+        └──────────────────┬─────────────────────────┘
+                           △
+        ┌──────────────────┼──────────────────┬──────────────────┐
+        │                  │                  │                  │
+   ┌─────────────┐ ┌──────────────┐ ┌──────────────┐ ┌─────────────┐
+   │  Hundred    │ │   Fifty      │ │    Twenty    │ │     Ten     │
+   │   Handler   │ │   Handler    │ │   Handler    │ │   Handler   │
+   ├─────────────┤ ├──────────────┤ ├──────────────┤ ├─────────────┤
+   │ denomination│ │denomination  │ │denomination  │ │denomination │
+   │ = 100       │ │ = 50         │ │ = 20         │ │ = 10        │
+   ├─────────────┤ ├──────────────┤ ├──────────────┤ ├─────────────┤
+   │ + process() │ │ + process()  │ │ + process()  │ │ + process() │
+   └─────────────┘ └──────────────┘ └──────────────┘ └─────────────┘
+   (Concrete)      (Concrete)       (Concrete)       (Concrete)
+
+        CHAIN LINKAGE:
+        ==============
+
+        Client requests: withdraw(280)
+           │
+           ▼
+        ┌─────────────────────────────────────┐
+        │  HundredHandler                     │
+        │ Can handle 100?                     │
+        │ 280 >= 100? YES                     │
+        │ Dispense: 2 × $100 = $200           │
+        │ Remaining: 280 - 200 = $80 ◄─ pass│
+        └─────────────────────────────────────┘
+           │
+           next─handle(80)
+           │
+           ▼
+        ┌─────────────────────────────────────┐
+        │  FiftyHandler                       │
+        │ Can handle 50?                      │
+        │ 80 >= 50? YES                       │
+        │ Dispense: 1 × $50 = $50             │
+        │ Remaining: 80 - 50 = $30 ◄─ pass   │
+        └─────────────────────────────────────┘
+           │
+           next─handle(30)
+           │
+           ▼
+        ┌─────────────────────────────────────┐
+        │  TwentyHandler                      │
+        │ Can handle 20?                      │
+        │ 30 >= 20? YES                       │
+        │ Dispense: 1 × $20 = $20             │
+        │ Remaining: 30 - 20 = $10 ◄─ pass   │
+        └─────────────────────────────────────┘
+           │
+           next─handle(10)
+           │
+           ▼
+        ┌─────────────────────────────────────┐
+        │  TenHandler                         │
+        │ Can handle 10?                      │
+        │ 10 >= 10? YES                       │
+        │ Dispense: 1 × $10 = $10             │
+        │ Remaining: 10 - 10 = $0 ◄─ DONE    │
+        └─────────────────────────────────────┘
+           │
+           next─handle(0)
+           │
+           ▼
+        Amount fully withdrawn!
+        Total: $200 + $50 + $20 + $10 = $280
+
+================================================================================
+5. COMPLETE C++ EXAMPLE: ATM MONEY WITHDRAWAL
+================================================================================
+
+#include <iostream>
+#include <memory>
+#include <vector>
+using namespace std;
+
+// ============= REQUEST: WITHDRAWAL REQUEST =============
+
+class WithdrawalRequest {
+private:
+    int amount;
+    int remaining;
+    vector<pair<int, int>> dispensed;  // denomination, count
+
+public:
+    WithdrawalRequest(int amt) : amount(amt), remaining(amt) {}
+
+    int getRemainingAmount() const { return remaining; }
+
+    void reduceAmount(int denomAmount, int count) {
+        remaining -= (denomAmount * count);
+        dispensed.push_back({denomAmount, count});
+        cout << "  Dispensing " << count << " × $" << denomAmount
+             << " = $" << (denomAmount * count) << endl;
+    }
+
+    void printDispensed() const {
+        cout << "\n╔════════════════════════════════════╗" << endl;
+        cout << "║  WITHDRAWAL SUMMARY                ║" << endl;
+        cout << "╠════════════════════════════════════╣" << endl;
+        cout << "║  Original Request: $" << amount << endl;
+
+        int total = 0;
+        for (const auto& p : dispensed) {
+            int subtotal = p.first * p.second;
+            total += subtotal;
+            cout << "║  " << p.second << " × $" << p.first
+                 << " notes = $" << subtotal << endl;
+        }
+
+        cout << "╠════════════════════════════════════╣" << endl;
+        cout << "║  Total Dispensed: $" << total << endl;
+        cout << "║  Remaining: $" << remaining << endl;
+        cout << "╚════════════════════════════════════╝\n" << endl;
+    }
+};
+
+// ============= ABSTRACT HANDLER =============
+
+abstract class DenominationHandler {
+protected:
+    int denomination;
+    DenominationHandler* nextHandler = nullptr;
+
+public:
+    DenominationHandler(int denom) : denomination(denom) {}
+
+    virtual ~DenominationHandler() {}
+
+    // Set next handler in chain
+    void setNext(DenominationHandler* handler) {
+        nextHandler = handler;
+    }
+
+    // Handle request - main method
+    void handle(WithdrawalRequest& request) {
+        if (canProcess(request)) {
+            process(request);
+        }
+
+        // Pass to next handler if amount remains
+        if (request.getRemainingAmount() > 0 && nextHandler) {
+            nextHandler->handle(request);
+        }
+    }
+
+protected:
+    // Check if handler can process
+    virtual bool canProcess(const WithdrawalRequest& request) const {
+        return request.getRemainingAmount() >= denomination;
+    }
+
+    // Process request - subclass implements
+    virtual void process(WithdrawalRequest& request) = 0;
+};
+
+// ============= CONCRETE HANDLERS =============
+
+class HundredHandler : public DenominationHandler {
+protected:
+    void process(WithdrawalRequest& request) override {
+        int remaining = request.getRemainingAmount();
+        int count = remaining / denomination;
+
+        if (count > 0) {
+            cout << "[HundredHandler] Processing $100 notes..." << endl;
+            request.reduceAmount(denomination, count);
+        }
+    }
+
+public:
+    HundredHandler() : DenominationHandler(100) {}
+};
+
+class FiftyHandler : public DenominationHandler {
+protected:
+    void process(WithdrawalRequest& request) override {
+        int remaining = request.getRemainingAmount();
+        int count = remaining / denomination;
+
+        if (count > 0) {
+            cout << "[FiftyHandler] Processing $50 notes..." << endl;
+            request.reduceAmount(denomination, count);
+        }
+    }
+
+public:
+    FiftyHandler() : DenominationHandler(50) {}
+};
+
+class TwentyHandler : public DenominationHandler {
+protected:
+    void process(WithdrawalRequest& request) override {
+        int remaining = request.getRemainingAmount();
+        int count = remaining / denomination;
+
+        if (count > 0) {
+            cout << "[TwentyHandler] Processing $20 notes..." << endl;
+            request.reduceAmount(denomination, count);
+        }
+    }
+
+public:
+    TwentyHandler() : DenominationHandler(20) {}
+};
+
+class TenHandler : public DenominationHandler {
+protected:
+    void process(WithdrawalRequest& request) override {
+        int remaining = request.getRemainingAmount();
+        int count = remaining / denomination;
+
+        if (count > 0) {
+            cout << "[TenHandler] Processing $10 notes..." << endl;
+            request.reduceAmount(denomination, count);
+        }
+    }
+
+public:
+    TenHandler() : DenominationHandler(10) {}
+};
+
+class FiveHandler : public DenominationHandler {
+protected:
+    void process(WithdrawalRequest& request) override {
+        int remaining = request.getRemainingAmount();
+        int count = remaining / denomination;
+
+        if (count > 0) {
+            cout << "[FiveHandler] Processing $5 notes..." << endl;
+            request.reduceAmount(denomination, count);
+        }
+    }
+
+public:
+    FiveHandler() : DenominationHandler(5) {}
+};
+
+class OneHandler : public DenominationHandler {
+protected:
+    void process(WithdrawalRequest& request) override {
+        int remaining = request.getRemainingAmount();
+        int count = remaining / denomination;
+
+        if (count > 0) {
+            cout << "[OneHandler] Processing $1 notes..." << endl;
+            request.reduceAmount(denomination, count);
+        }
+    }
+
+public:
+    OneHandler() : DenominationHandler(1) {}
+};
+
+// ============= ATM CLASS =============
+
+class ATM {
+private:
+    DenominationHandler* chain = nullptr;
+
+public:
+    ATM() {
+        // Build chain of handlers
+        auto hundred = new HundredHandler();
+        auto fifty = new FiftyHandler();
+        auto twenty = new TwentyHandler();
+        auto ten = new TenHandler();
+        auto five = new FiveHandler();
+        auto one = new OneHandler();
+
+        // Link the chain
+        hundred->setNext(fifty);
+        fifty->setNext(twenty);
+        twenty->setNext(ten);
+        ten->setNext(five);
+        five->setNext(one);
+
+        chain = hundred;
+    }
+
+    void withdraw(int amount) {
+        if (amount <= 0) {
+            cout << "Invalid amount!" << endl;
+            return;
+        }
+
+        cout << "\n" << string(70, '=') << endl;
+        cout << "ATM WITHDRAWAL REQUEST: $" << amount << endl;
+        cout << string(70, '=') << "\n" << endl;
+
+        WithdrawalRequest request(amount);
+
+        // Process through chain
+        if (chain) {
+            chain->handle(request);
+        }
+
+        // Display result
+        request.printDispensed();
+    }
+};
+
+// ============= CLIENT CODE =============
+
+int main() {
+    cout << "===== CHAIN OF RESPONSIBILITY DESIGN PATTERN =====" << endl;
+    cout << "ATM Money Withdrawal Example\n" << endl;
+
+    ATM atm;
+
+    // ===--- Scenario 1: Simple amount ---===
+    cout << "--- Scenario 1: Withdraw $50 ---" << endl;
+    atm.withdraw(50);
+
+    // ===--- Scenario 2: Multiple denominations ---===
+    cout << "--- Scenario 2: Withdraw $280 ---" << endl;
+    atm.withdraw(280);
+
+    // ===--- Scenario 3: Complex amount ---===
+    cout << "--- Scenario 3: Withdraw $573 ---" << endl;
+    atm.withdraw(573);
+
+    // ===--- Scenario 4: Amount not divisible cleanly ---===
+    cout << "--- Scenario 4: Withdraw $127 ---" << endl;
+    atm.withdraw(127);
+
+    // ===--- Scenario 5: Large amount ---===
+    cout << "--- Scenario 5: Withdraw $1234 ---" << endl;
+    atm.withdraw(1234);
+
+    cout << "\n" << string(70, '=') << endl;
+    cout << "CHAIN OF RESPONSIBILITY BENEFITS:" << endl;
+    cout << string(70, '=') << endl;
+    cout << "✓ Each handler (denomination) is independent" << endl;
+    cout << "✓ Handlers don't know about each other" << endl;
+    cout << "✓ Request flows through chain automatically" << endl;
+    cout << "✓ Easy to add new denominations (just create handler)" << endl;
+    cout << "✓ Easy to remove denominations (don't add to chain)" << endl;
+    cout << "✓ Handler order can be changed (reorder chain)" << endl;
+    cout << "✓ Single responsibility: each handler does one thing" << endl;
+    cout << string(70, '=') << "\n" << endl;
+
+    return 0;
+}
+
+================================================================================
+6. WHEN TO USE CHAIN OF RESPONSIBILITY
+================================================================================
+
+USE WHEN:
+✓ Multiple objects might handle request
+✓ Handler not known at design time
+✓ Want to issue request without specifying receiver
+✓ Want to chain handlers dynamically
+✓ Handler should pass request to others if can't handle
+
+AVOID WHEN:
+✗ Only one handler should process
+✗ All handlers must process (use Iterator instead)
+✗ Handler is always known (direct call is better)
+✗ Guaranteed request must be handled (hard to debug failures)
+✗ Performance critical (overhead of chain traversal)
+
+================================================================================
+7. REAL-WORLD APPLICATIONS
+================================================================================
+
+ATM/BANK:
+✓ Money withdrawal (example given)
+✓ Check processing
+✓ Loan approval (different levels)
+
+CUSTOMER SUPPORT:
+✓ Level 1 support → Level 2 → Manager → Director
+✓ Each level tries to solve
+✓ Escalates if can't handle
+
+WEB FRAMEWORKS:
+✓ Middleware chains
+✓ Request logging → authentication → authorization → processing
+✓ Response filters
+
+EVENT SYSTEMS:
+✓ Event bubbling in DOM
+✓ Parent element handles if child doesn't
+✓ Event propagation through hierarchy
+
+OPERATING SYSTEMS:
+✓ Signal handling
+✓ Interrupt handling
+✓ Handler chain for different interrupt types
+
+APPROVAL WORKFLOWS:
+✓ Purchase requisition approval
+✓ Travel request approval
+✓ Escalates based on amount
+
+LOGGING FRAMEWORKS:
+✓ Log level handlers
+✓ Debug → Info → Warning → Error
+✓ Different handlers for different levels
+
+EXCEPTION HANDLING:
+✓ Try-catch chain
+✓ Inner catch passes to outer
+✓ Finally block as final handler
+
+FILE SYSTEMS:
+✓ File access permissions
+✓ Owner → Group → Others
+✓ Each level checks permissions
+
+================================================================================
+8. VARIATION: RESPONSIBILITY CHAIN WITH MULTIPLE HANDLERS
+================================================================================
+
+Some chains allow MULTIPLE handlers to process same request:
+
+class FilterChain {
+private:
+    vector<Filter*> filters;
+
+public:
+    void doFilter(Request& request) {
+        for (auto filter : filters) {
+            filter->doFilter(request);  // All filters process!
+        }
+    }
+};
+
+All filters process the request, not just one.
+Useful for: logging, validation, transformation pipelines
+
+
+vs. TRADITIONAL CHAIN:
+
+Traditional (ATM):
+  One handler processes, passes to next
+  Request flows through chain until handled
+
+Pipeline:
+  All handlers process
+  Request transformed through pipeline
+  Common in data processing
+
+================================================================================
+9. COMPARISON WITH SIMILAR PATTERNS
+================================================================================
+
+CHAIN OF RESPONSIBILITY vs COMMAND:
+====================================
+Chain of Responsibility:
+  - Request passed along chain
+  - Sender doesn't know handler
+  - Handler decides to process or pass
+
+Command:
+  - Encapsulates entire request
+  - Sender determines recipient
+  - Recipient always processes
+
+
+CHAIN OF RESPONSIBILITY vs MEDIATOR:
+====================================
+Chain of Responsibility:
+  - Linear chain of handlers
+  - Handler passes to next
+  - Decentralized
+
+Mediator:
+  - Central mediator object
+  - All objects talk to mediator
+  - Centralized
+
+
+CHAIN OF RESPONSIBILITY vs MIDDLEWARE:
+=======================================
+Similar concepts but:
+  - Middleware: web framework term
+  - Chain of Responsibility: design pattern term
+  - Both pass request through handlers
+
+================================================================================
+10. IMPLEMENTATION PATTERNS
+================================================================================
+
+PATTERN 1: PURE CHAIN (One handler processes)
+==============================================
+abstract class Handler {
+    protected Handler next;
+
+    void handle(Request r) {
+        if (canHandle(r)) {
+            process(r);
+        } else if (next) {
+            next.handle(r);  // Pass to next
+        }
+    }
+};
+
+
+PATTERN 2: FILTER CHAIN (All handlers process)
+===============================================
+class FilterChain {
+    void doFilter(Request r) {
+        for (Filter f : filters) {
+            f.doFilter(r);  // Each filter processes
+        }
+    }
+};
+
+
+PATTERN 3: CHAIN WITH DECISION
+===============================
+abstract class Handler {
+    void handle(Request r) {
+        if (matches(r)) {
+            process(r);
+            return;  // Stop here
+        }
+        if (next) next.handle(r);
+    }
+};
+
+================================================================================
+11. BEST PRACTICES
+================================================================================
+
+DO:
+✓ Have default handler at end of chain
+✓ Document which handlers should process request
+✓ Ensure handlers are independent
+✓ Keep handlers focused (single responsibility)
+✓ Test each handler independently
+✓ Use weak references if cycles possible
+✓ Provide way to log handler chain execution
+
+DON'T:
+✗ Create circular chains (causes infinite loop)
+✗ Forget to set next handler
+✗ Make handlers depend on each other
+✗ Leave request unhandled (provide default)
+✗ Make chain too long (causes performance issues)
+✗ Mix request handling strategies
+✗ Ignore null pointer exceptions
+
+DESIGN CHECKLIST:
+□ Does request naturally fit a chain?
+□ Are handlers independent?
+□ Is handler order flexible?
+□ Do we need all or some handlers to process?
+□ Can we add/remove handlers at runtime?
+□ What if no handler handles request?
+□ Is performance acceptable?
+
+================================================================================
+12. ADVANTAGES vs DISADVANTAGES SUMMARY
+================================================================================
+
+BEST FOR:
+✓ Flexible request processing
+✓ Multiple possible handlers
+✓ Dynamic handler chains
+✓ Processing pipelines
+
+AVOID FOR:
+✗ Single known handler
+✗ All handlers must process
+✗ Performance-critical code
+✗ Simple request-response
+
+BALANCE:
+The pattern provides flexibility at cost of:
+  • Reduced traceability
+  • Potential performance overhead
+  • Complexity of chain management
+
+Worth it when:
+  • Flexibility is important
+  • Handlers frequently change
+  • Different requests need different paths
+
+Not worth it when:
+  • Handler is always known
+  • Simple one-off processing
+  • Performance is critical
+
+================================================================================
