@@ -1,0 +1,1364 @@
+================================================================================
+                        BUILDER DESIGN PATTERN
+================================================================================
+
+1. WHAT IS BUILDER DESIGN PATTERN?
+================================================================================
+The Builder Design Pattern provides a way to construct complex objects step by
+step. It separates the construction of a complex object from its representation,
+allowing the same construction process to create different representations.
+
+Think of it like a Pizza delivery:
+  - A pizza has many optional ingredients (cheese, pepperoni, mushrooms, etc.)
+  - A pizza has required properties (base, sauce)
+  - Instead of: Pizza(flour, water, tomato, cheese, pepperoni, mushrooms...)
+  - Builder: pizza.withCheese().withPepperoni().withMushrooms().build()
+
+Key Intent:
+  - Separate construction from representation
+  - Handle optional attributes elegantly
+  - Avoid constructor overloading hell
+  - Ensure objects are always in consistent state
+  - Create different variations of same object
+
+
+================================================================================
+2. PROBLEMS WITHOUT BUILDER (WHAT WAS THE NEED?)
+================================================================================
+
+2.1 CONSTRUCTOR OVERLOADING PROBLEM
+=======================================
+Without Builder, you'd need many constructors to handle different combinations:
+
+Example - HTTP Request class without Builder:
+
+```cpp
+class HttpRequest {
+public:
+    // Nightmare of constructor overloading!
+    HttpRequest(string method) { ... }
+    HttpRequest(string method, string url) { ... }
+    HttpRequest(string method, string url, string body) { ... }
+    HttpRequest(string method, string url, string body, int timeout) { ... }
+    HttpRequest(string method, string url, string body, int timeout, bool ssl) { ... }
+    HttpRequest(string method, string url, string body, int timeout, bool ssl,
+                 map<string,string> headers) { ... }
+    // ... and many more combinations!
+
+    // Which constructor to use? Common issue: "pyramid of overloads"
+};
+
+// Client confusion:
+HttpRequest req1(
+    "GET",                    // what's this?
+    "https://api.com",        // and this?
+    "",                       // empty string for what?
+    5000,                     // timeout in ms? or seconds?
+    true                      // ssl enabled?
+);
+```
+
+Problems:
+✗ Unreadable: Hard to understand what each parameter means
+✗ Unmaintainable: Adding new field = add ALL combinations again
+✗ Error-prone: Easy to pass parameters in wrong order
+✗ Scalability: N optional fields = 2^N constructor combinations
+
+
+2.2 MUTABILITY PROBLEM (Inconsistent State)
+==============================================
+Without Builder, object state can be partially initialized:
+
+```cpp
+class HttpRequest {
+public:
+    string method;
+    string url;
+    string body;
+    int timeout;
+    bool useSSL;
+    map<string, string> headers;
+
+    // Default constructor - DANGEROUS!
+    HttpRequest() : timeout(0), useSSL(false) {}
+
+    // Setters - object can be in invalid state
+    void setMethod(string m) { this->method = m; }
+    void setUrl(string u) { this->url = u; }
+    void setBody(string b) { this->body = b; }
+    // ...
+};
+
+// Client can create invalid objects:
+HttpRequest req;                    // Created with ALL defaults
+req.setMethod("GET");               // Only method set
+// What if send() is called now?    // Missing URL, headers, timeout values!
+
+// Object is MUTABLE - state can change after creation
+req.setMethod("GET");
+// ... 50 lines of code ...
+req.setMethod("POST");              // WAIT! Was it supposed to be GET?
+```
+
+Problems:
+✗ Objects can be in invalid/inconsistent states
+✗ Mutable = state can be modified unexpectedly
+✗ Thread-unsafe: Multiple threads accessing same object
+✗ Debugging nightmare: When did the object become invalid?
+
+
+2.3 SCATTERED VALIDATION PROBLEM
+==================================
+Without Builder, validation is scattered everywhere:
+
+```cpp
+class HttpRequest {
+public:
+    string method;
+    string url;
+
+    bool isValid() {
+        // Validation scattered in multiple places!
+        if (method.empty()) return false;  // Check 1
+        if (method != "GET" && method != "POST" && method != "PUT")
+            return false;  // Check 2
+        if (url.empty()) return false;  // Check 3
+        if (url.find("http://") != 0 && url.find("https://") != 0)
+            return false;  // Check 4
+        // More checks...
+        return true;
+    }
+
+    void send() {
+        if (!isValid()) throw runtime_error("Invalid request");
+        // Send logic
+    }
+};
+
+// Same validation logic duplicated:
+void validateRequest(HttpRequest& req) {
+    if (req.method.empty()) throw runtime_error("Method empty");
+    // Duplicate validation!
+}
+
+void logRequest(HttpRequest& req) {
+    if (req.method.empty()) throw runtime_error("Method empty");
+    // Duplicate validation!
+}
+```
+
+Problems:
+✗ Validation rules scattered across multiple methods
+✗ Same validation checks in different places
+✗ Easy to miss some checks in some methods
+✗ Hard to maintain - update one place, forget others
+✗ Objects can pass through with invalid data
+
+
+2.4 INCONSISTENT STATE PROBLEM (Real Example)
+==============================================
+
+```cpp
+// Without Builder - object can be partially constructed
+HttpRequest req;
+req.method = "POST";
+// ... 100 lines of code ...
+cout << req.url;  // Returns empty string! Was this intended?
+// Developer forgot to set URL
+
+// Another example:
+req.timeout = -5;  // Negative timeout! Should be rejected
+
+// Headers might be incomplete:
+req.headers["Content-Type"] = "application/json";
+// What if Content-Length is missing? Body doesn't match headers!
+```
+
+Real-world impact:
+✗ Requests sent with wrong parameters
+✗ Timeouts with invalid values
+✗ Headers mismatched with body
+✗ Protocol violations
+
+
+================================================================================
+3. SOLUTION PART 1: SIMPLE BUILDER (Without Director)
+================================================================================
+
+3.1 BASIC BUILDER PATTERN
+==========================
+
+A Builder is an inner class that:
+  1. Takes constructor parameters
+  2. Has methods to set optional attributes (returns *this for chaining)
+  3. Has a build() method that creates final object with validation
+
+HTTP Request Builder Example:
+
+```cpp
+#include <iostream>
+#include <map>
+#include <string>
+#include <stdexcept>
+using namespace std;
+
+class HttpRequest {
+private:
+    string method;
+    string url;
+    string body;
+    int timeout;
+    bool useSSL;
+    map<string, string> headers;
+
+    // Private constructor - can only be called from Builder
+    HttpRequest(const string& m, const string& u, int t, bool ssl)
+        : method(m), url(u), timeout(t), useSSL(ssl) {}
+
+public:
+    // Make Builder a friend so it can access private constructor
+    friend class Builder;
+
+    // Getters (const - immutable observation)
+    string getMethod() const { return method; }
+    string getUrl() const { return url; }
+    string getBody() const { return body; }
+    int getTimeout() const { return timeout; }
+    bool isSSL() const { return useSSL; }
+
+    // Builder inner class
+    class Builder {
+    private:
+        string method;
+        string url;
+        string body = "";
+        int timeout = 5000;
+        bool useSSL = true;
+        map<string, string> headers;
+
+        // Validation logic - centralized!
+        void validateBuild() const {
+            if (method.empty())
+                throw runtime_error("Method is required");
+
+            if (method != "GET" && method != "POST" &&
+                method != "PUT" && method != "DELETE")
+                throw runtime_error("Invalid HTTP method");
+
+            if (url.empty())
+                throw runtime_error("URL is required");
+
+            if (url.find("http://") != 0 && url.find("https://") != 0)
+                throw runtime_error("URL must start with http:// or https://");
+
+            if (timeout <= 0)
+                throw runtime_error("Timeout must be positive");
+
+            // POST/PUT request must have body
+            if ((method == "POST" || method == "PUT") && body.empty())
+                throw runtime_error("POST/PUT requests must have body");
+
+            if (headers.empty())
+                throw runtime_error("At least one header is required");
+        }
+
+    public:
+        // Constructor with required fields
+        Builder(const string& m, const string& u)
+            : method(m), url(u) {}
+
+        // Fluent interface - return *this for chaining
+        Builder& withBody(const string& b) {
+            body = b;
+            return *this;  // Enable method chaining
+        }
+
+        Builder& withTimeout(int t) {
+            timeout = t;
+            return *this;
+        }
+
+        Builder& withSSL(bool ssl) {
+            useSSL = ssl;
+            return *this;
+        }
+
+        Builder& withHeader(const string& key, const string& value) {
+            headers[key] = value;
+            return *this;
+        }
+
+        Builder& withContentType(const string& type) {
+            headers["Content-Type"] = type;
+            return *this;
+        }
+
+        // Final step - build with validation
+        HttpRequest build() {
+            validateBuild();  // All validation happens here!
+
+            HttpRequest req(method, url, timeout, useSSL);
+            req.body = body;
+            req.headers = headers;
+            return req;
+        }
+    };
+};
+
+// Usage Example:
+int main() {
+    try {
+        // Simple GET request - fluent interface
+        HttpRequest getReq = HttpRequest::Builder("GET", "https://api.github.com/users")
+            .withHeader("Authorization", "Bearer token123")
+            .withTimeout(3000)
+            .build();
+
+        cout << "GET Request:" << endl;
+        cout << "  Method: " << getReq.getMethod() << endl;
+        cout << "  URL: " << getReq.getUrl() << endl;
+        cout << "  Timeout: " << getReq.getTimeout() << "ms" << endl;
+
+        // Complex POST request
+        HttpRequest postReq = HttpRequest::Builder("POST", "https://api.example.com/data")
+            .withBody(R"({"name":"John","age":30})")
+            .withContentType("application/json")
+            .withHeader("Accept", "application/json")
+            .withSSL(true)
+            .withTimeout(5000)
+            .build();
+
+        cout << "\nPOST Request:" << endl;
+        cout << "  Method: " << postReq.getMethod() << endl;
+        cout << "  URL: " << postReq.getUrl() << endl;
+        cout << "  Body: " << postReq.getBody() << endl;
+        cout << "  Timeout: " << postReq.getTimeout() << "ms" << endl;
+
+        // This will fail validation!
+        // HttpRequest invalid = HttpRequest::Builder("GET", "https://api.com")
+        //     .withTimeout(-100)  // Negative timeout!
+        //     .build();  // Throws exception
+
+    } catch (const exception& e) {
+        cerr << "Error: " << e.what() << endl;
+    }
+
+    return 0;
+}
+```
+
+Advantages of Simple Builder:
+✓ Eliminates constructor overloading
+✓ Objects are immutable after creation
+✓ Validation happens in one place (build() method)
+✓ Fluent interface - readable chain of method calls
+✓ Optional fields handled elegantly
+✓ Creates objects in consistent state
+
+
+================================================================================
+4. SOLUTION PART 2: BUILDER WITH DIRECTOR
+================================================================================
+
+4.1 WHAT IS DIRECTOR AND WHY WAS IT INTRODUCED?
+================================================
+
+PROBLEM WITHOUT DIRECTOR:
+When you have multiple, complex ways to build the same object, the Builder
+class becomes cluttered with many build combinations.
+
+Example: Building HTTP requests for different REST operations
+
+WITHOUT Director, the Builder explodes:
+
+```cpp
+class HttpRequest::Builder {
+    // Each common scenario needs its own methods!
+    HttpRequest buildGetUserRequest(int userId) { ... }
+    HttpRequest buildPostCreateUserRequest(User user) { ... }
+    HttpRequest buildPutUpdateUserRequest(int userId, User user) { ... }
+    HttpRequest buildDeleteUserRequest(int userId) { ... }
+    HttpRequest buildListUsersRequest(int page) { ... }
+    // And many more...
+};
+```
+
+Problem: Builder becomes a "God Object" - too many responsibilities!
+
+
+SOLUTION: DIRECTOR CLASS
+
+Director is a class that encapsulates the construction logic. It:
+  1. Knows HOW to build common objects
+  2. Uses Builder to construct them
+  3. Shields client from complex construction steps
+  4. Makes common scenarios simple
+
+Benefits of Director:
+✓ Builder stays simple - only knows about basic construction
+✓ Common build patterns are hidden in Director
+✓ Different Directors can build different variations
+✓ Client code is simpler
+✓ Changes to construction logic affect only Director
+
+
+4.2 BUILDER WITH DIRECTOR PATTERN (GET and POST Example)
+==========================================================
+
+```cpp
+#include <iostream>
+#include <map>
+#include <string>
+#include <stdexcept>
+using namespace std;
+
+// Product: Complex HTTP Request
+class HttpRequest {
+private:
+    string method;
+    string url;
+    string body;
+    int timeout;
+    bool useSSL;
+    map<string, string> headers;
+
+    HttpRequest(const string& m, const string& u, int t, bool ssl)
+        : method(m), url(u), timeout(t), useSSL(ssl) {}
+
+public:
+    friend class HttpRequestBuilder;
+    friend class HttpRequestDirector;
+
+    string getMethod() const { return method; }
+    string getUrl() const { return url; }
+    string getBody() const { return body; }
+    int getTimeout() const { return timeout; }
+    bool isSSL() const { return useSSL; }
+
+    map<string, string> getHeaders() const { return headers; }
+
+    void print() const {
+        cout << "HTTP " << method << " " << url << endl;
+        cout << "Timeout: " << timeout << "ms, SSL: " << (useSSL ? "ON" : "OFF") << endl;
+        if (!body.empty()) cout << "Body: " << body << endl;
+        cout << "Headers:" << endl;
+        for (auto& h : headers) {
+            cout << "  " << h.first << ": " << h.second << endl;
+        }
+    }
+
+    // Builder - focused on construction
+    class Builder {
+    private:
+        string method;
+        string url;
+        string body = "";
+        int timeout = 5000;
+        bool useSSL = true;
+        map<string, string> headers;
+
+        void validate() const {
+            if (method.empty()) throw runtime_error("Method required");
+            if (url.empty()) throw runtime_error("URL required");
+            if (timeout <= 0) throw runtime_error("Invalid timeout");
+            if (headers.empty()) throw runtime_error("Headers required");
+            if ((method == "POST" || method == "PUT") && body.empty())
+                throw runtime_error("POST/PUT need body");
+        }
+
+    public:
+        Builder(const string& m, const string& u) : method(m), url(u) {}
+
+        Builder& withBody(const string& b) { body = b; return *this; }
+        Builder& withTimeout(int t) { timeout = t; return *this; }
+        Builder& withSSL(bool ssl) { useSSL = ssl; return *this; }
+        Builder& withHeader(const string& k, const string& v) {
+            headers[k] = v; return *this;
+        }
+
+        HttpRequest build() {
+            validate();
+            HttpRequest req(method, url, timeout, useSSL);
+            req.body = body;
+            req.headers = headers;
+            return req;
+        }
+    };
+};
+
+// Director: Encapsulates construction of COMMON request patterns
+class HttpRequestDirector {
+private:
+    // Common base headers for all requests
+    static void addCommonHeaders(HttpRequest::Builder& builder) {
+        builder.withHeader("User-Agent", "MyApp/1.0")
+               .withHeader("Accept", "application/json");
+    }
+
+public:
+    // Construct GET request - common pattern
+    // (GET requests don't have body, need authentication, etc.)
+    static HttpRequest constructGetRequest(const string& url,
+                                           const string& authToken,
+                                           int timeout = 5000) {
+        HttpRequest::Builder builder("GET", url);
+
+        addCommonHeaders(builder)
+            .withHeader("Authorization", "Bearer " + authToken)
+            .withSSL(true)
+            .withTimeout(timeout);
+
+        return builder.build();
+    }
+
+    // Construct POST request - different pattern
+    // (POST requests have body, content-type, authentication)
+    static HttpRequest constructPostRequest(const string& url,
+                                            const string& jsonBody,
+                                            const string& authToken,
+                                            int timeout = 5000) {
+        HttpRequest::Builder builder("POST", url);
+
+        addCommonHeaders(builder)
+            .withHeader("Content-Type", "application/json")
+            .withHeader("Authorization", "Bearer " + authToken)
+            .withBody(jsonBody)
+            .withSSL(true)
+            .withTimeout(timeout);
+
+        return builder.build();
+    }
+
+    // Construct PUT request for updates
+    static HttpRequest constructPutRequest(const string& url,
+                                           const string& jsonBody,
+                                           const string& authToken,
+                                           int timeout = 5000) {
+        HttpRequest::Builder builder("PUT", url);
+
+        addCommonHeaders(builder)
+            .withHeader("Content-Type", "application/json")
+            .withHeader("Authorization", "Bearer " + authToken)
+            .withBody(jsonBody)
+            .withSSL(true)
+            .withTimeout(timeout);
+
+        return builder.build();
+    }
+
+    // Construct DELETE request
+    static HttpRequest constructDeleteRequest(const string& url,
+                                              const string& authToken,
+                                              int timeout = 5000) {
+        HttpRequest::Builder builder("DELETE", url);
+
+        addCommonHeaders(builder)
+            .withHeader("Authorization", "Bearer " + authToken)
+            .withSSL(true)
+            .withTimeout(timeout);
+
+        return builder.build();
+    }
+};
+
+// Usage: Client code is now MUCH simpler!
+int main() {
+    try {
+        // WITHOUT Director - client would need to know all details:
+        // HttpRequest req = HttpRequest::Builder("GET", "https://api.com/users")
+        //     .withHeader("Authorization", "Bearer ...")
+        //     .withHeader("User-Agent", "MyApp/1.0")
+        //     .withHeader("Accept", "application/json")
+        //     .withSSL(true)
+        //     .withTimeout(5000)
+        //     .build();
+
+        // WITH Director - client just calls simple method!
+        cout << "=== DIRECTOR PATTERN - GET Request ===" << endl;
+        HttpRequest getReq = HttpRequestDirector::constructGetRequest(
+            "https://api.github.com/users/torvalds",
+            "ghp_abc123xyz789"
+        );
+        getReq.print();
+
+        cout << "\n=== DIRECTOR PATTERN - POST Request ===" << endl;
+        string jsonBody = R"({
+            "name": "John Doe",
+            "email": "john@example.com",
+            "age": 30
+        })";
+
+        HttpRequest postReq = HttpRequestDirector::constructPostRequest(
+            "https://api.example.com/users",
+            jsonBody,
+            "ghp_abc123xyz789"
+        );
+        postReq.print();
+
+        cout << "\n=== DIRECTOR PATTERN - PUT Request ===" << endl;
+        string updateBody = R"({
+            "name": "John Updated",
+            "age": 31
+        })";
+
+        HttpRequest putReq = HttpRequestDirector::constructPutRequest(
+            "https://api.example.com/users/123",
+            updateBody,
+            "ghp_abc123xyz789"
+        );
+        putReq.print();
+
+        cout << "\n=== DIRECTOR PATTERN - DELETE Request ===" << endl;
+        HttpRequest deleteReq = HttpRequestDirector::constructDeleteRequest(
+            "https://api.example.com/users/123",
+            "ghp_abc123xyz789"
+        );
+        deleteReq.print();
+
+    } catch (const exception& e) {
+        cerr << "Error: " << e.what() << endl;
+    }
+
+    return 0;
+}
+```
+
+WHY DIRECTOR WAS INTRODUCED - Summary
+======================================
+
+Problem:
+--------
+WITHOUT Director, complex building logic lives in the client code. The client
+needs to know:
+  - How to construct GET requests (requires these headers)
+  - How to construct POST requests (requires these headers + body)
+  - How to construct PUT requests
+  - How to construct DELETE requests
+  - Common patterns (auth tokens, common headers, SSL defaults, timeouts)
+
+Result: DUPLICATE CODE everywhere!
+
+```cpp
+// Client code - REPEATED construction logic all over!
+HttpRequest getReq = HttpRequest::Builder("GET", "https://...")
+    .withHeader("User-Agent", "MyApp/1.0")
+    .withHeader("Accept", "application/json")
+    .withHeader("Authorization", "Bearer token")
+    .build();
+
+// Same headers repeated again somewhere else!
+HttpRequest getReq2 = HttpRequest::Builder("GET", "https://...")
+    .withHeader("User-Agent", "MyApp/1.0")
+    .withHeader("Accept", "application/json")
+    .withHeader("Authorization", "Bearer token2")
+    .build();
+```
+
+WITH Director:
+
+Solution: Encapsulate construction patterns in Director!
+
+```cpp
+// Simple! Director knows the pattern
+HttpRequest getReq = HttpRequestDirector::constructGetRequest(
+    "https://...",
+    "token"
+);
+
+HttpRequest getReq2 = HttpRequestDirector::constructGetRequest(
+    "https://...",
+    "token2"
+);
+```
+
+Benefits:
+---------
+✓ Reduced code duplication
+✓ Client code is simpler and more readable
+✓ Construction patterns centralized in one place
+✓ Easier to change patterns (update Director, not all client code)
+✓ Encapsulation: Client doesn't need to know implementation details
+
+
+================================================================================
+5. SOLUTION PART 3: BUILDER WITH STEPS (Abstract Classes)
+================================================================================
+
+5.1 WHAT IS BUILDER WITH STEPS?
+================================
+
+Builder with Steps uses ABSTRACT classes to enforce a SEQUENTIAL building process.
+
+Key Idea:
+  - Divide construction into distinct STEPS
+  - Force steps to be done in specific ORDER
+  - Each step returns an object that only has NEXT step available
+  - Prevents skipping mandatory steps
+  - Compile-time safety!
+
+Use Case: Pizza ordering
+
+Step 1: Choose base    → returns Step2Object
+Step 2: Add toppings   → returns Step3Object
+Step 3: Choose drink   → returns Step4Object
+Step 4: Pay            → returns final Pizza
+
+You CAN'T:
+  ✗ Skip step 1 and call step 2
+  ✗ Do step 3 before step 2
+  ✗ The TypeSystem prevents it at COMPILE TIME!
+
+
+5.2 BUILDER WITH STEPS EXAMPLE (Pizza Order with 4 Steps)
+===========================================================
+
+```cpp
+#include <iostream>
+#include <string>
+#include <vector>
+using namespace std;
+
+class Pizza {
+private:
+    string base;
+    vector<string> toppings;
+    string drink;
+    int quantity;
+    double price;
+
+    // Private constructor - can only be created via Builder steps
+    Pizza(const string& b, const vector<string>& t,
+          const string& d, int q, double p)
+        : base(b), toppings(t), drink(d), quantity(q), price(p) {}
+
+public:
+    friend class PizzaBuilder;  // Builder can access private constructor
+
+    void display() const {
+        cout << "\n=== PIZZA ORDER ===" << endl;
+        cout << "Base: " << base << endl;
+        cout << "Toppings: ";
+        for (const auto& topping : toppings) {
+            cout << topping << ", ";
+        }
+        cout << "\nDrink: " << drink << endl;
+        cout << "Quantity: " << quantity << endl;
+        cout << "Total Price: $" << price << endl;
+    }
+};
+
+// Step 1: Abstract - Choose Base
+class Step1_ChooseBase {
+public:
+    virtual ~Step1_ChooseBase() = default;
+    virtual class Step2_AddToppings& withThinCrust() = 0;
+    virtual class Step2_AddToppings& withThickCrust() = 0;
+    virtual class Step2_AddToppings& withStuffedCrust() = 0;
+};
+
+// Step 2: Abstract - Add Toppings (returned from Step 1)
+class Step2_AddToppings {
+public:
+    virtual ~Step2_AddToppings() = default;
+    virtual Step2_AddToppings& addCheese() = 0;
+    virtual Step2_AddToppings& addPepperoni() = 0;
+    virtual Step2_AddToppings& addMushrooms() = 0;
+    virtual class Step3_ChooseDrink& done() = 0;  // Move to next step
+};
+
+// Step 3: Abstract - Choose Drink (returned from Step 2)
+class Step3_ChooseDrink {
+public:
+    virtual ~Step3_ChooseDrink() = default;
+    virtual class Step4_Confirm& withCola() = 0;
+    virtual Step4_Confirm& withJuice() = 0;
+    virtual Step4_Confirm& withWaterNoCharge() = 0;
+};
+
+// Step 4: Abstract - Confirm & Pay (returned from Step 3)
+class Step4_Confirm {
+public:
+    virtual ~Step4_Confirm() = default;
+    virtual Step4_Confirm& setQuantity(int qty) = 0;
+    virtual Pizza confirm() = 0;  // Final step - returns Pizza
+};
+
+// CONCRETE BUILDER implementing all steps
+class PizzaBuilder : public Step1_ChooseBase,
+                     public Step2_AddToppings,
+                     public Step3_ChooseDrink,
+                     public Step4_Confirm {
+private:
+    string base;
+    vector<string> toppings;
+    string drink;
+    int quantity = 1;
+
+    // Private constructor - use static method instead
+    PizzaBuilder() {}
+
+public:
+    // Entry point
+    static Step1_ChooseBase& startOrder() {
+        return *(new PizzaBuilder());
+    }
+
+    // STEP 1 implementations - returns Step2
+    Step2_AddToppings& withThinCrust() override {
+        base = "Thin Crust";
+        return *this;  // Return Step2
+    }
+
+    Step2_AddToppings& withThickCrust() override {
+        base = "Thick Crust";
+        return *this;
+    }
+
+    Step2_AddToppings& withStuffedCrust() override {
+        base = "Stuffed Crust";
+        return *this;
+    }
+
+    // STEP 2 implementations - add toppings and return Step3
+    Step2_AddToppings& addCheese() override {
+        toppings.push_back("Cheese");
+        return *this;  // Chain more toppings
+    }
+
+    Step2_AddToppings& addPepperoni() override {
+        toppings.push_back("Pepperoni");
+        return *this;
+    }
+
+    Step2_AddToppings& addMushrooms() override {
+        toppings.push_back("Mushrooms");
+        return *this;
+    }
+
+    Step3_ChooseDrink& done() override {
+        return *this;  // Move from Step2 to Step3
+    }
+
+    // STEP 3 implementations - choose drink, return Step4
+    Step4_Confirm& withCola() override {
+        drink = "Coca Cola";
+        return *this;
+    }
+
+    Step4_Confirm& withJuice() override {
+        drink = "Orange Juice";
+        return *this;
+    }
+
+    Step4_Confirm& withWaterNoCharge() override {
+        drink = "Water (Free)";
+        return *this;
+    }
+
+    // STEP 4 implementations - finalize
+    Step4_Confirm& setQuantity(int qty) override {
+        quantity = qty;
+        return *this;
+    }
+
+    Pizza confirm() override {
+        // Calculate price
+        double price = 12.99;  // Base price for pizza
+        price += toppings.size() * 1.50;  // $1.50 per topping
+        if (drink != "Water (Free)") price += 2.50;  // Drink cost
+        price *= quantity;
+
+        // Create final Pizza object
+        Pizza pizza(base, toppings, drink, quantity, price);
+        delete this;  // Clean up builder
+        return pizza;
+    }
+};
+
+// Usage Example - Shows type-safe step enforcement
+int main() {
+    try {
+        cout << "=== BUILDER WITH STEPS PATTERN ===" << endl;
+
+        // This MUST follow the steps in order!
+        // You CAN'T call Step3 before Step2 - compiler won't allow!
+
+        Pizza order1 = PizzaBuilder::startOrder()  // Returns Step1
+            .withThinCrust()                        // Must do Step1 first
+            .addCheese()                            // Then Step2
+            .addPepperoni()
+            .addMushrooms()
+            .done()                                 // Move to Step3
+            .withCola()                             // Then Step3
+            .setQuantity(2)                         // Then Step4
+            .confirm();                             // Finally, get Pizza
+
+        order1.display();
+
+        // Another order
+        Pizza order2 = PizzaBuilder::startOrder()
+            .withStuffedCrust()
+            .addCheese()
+            .done()
+            .withJuice()
+            .setQuantity(1)
+            .confirm();
+
+        order2.display();
+
+        // This won't compile! (Try uncommenting to see error)
+        // Pizza invalid = PizzaBuilder::startOrder()
+        //     .withCola()  // ERROR! Can't call Step3 before Step1!
+        //     .withThinCrust();
+
+        // This won't compile!
+        // Pizza invalid2 = PizzaBuilder::startOrder()
+        //     .withThinCrust()
+        //     .setQuantity(5)  // ERROR! Can't call Step4 before Step2 & Step3!
+        //     .confirm();
+
+    } catch (const exception& e) {
+        cerr << "Error: " << e.what() << endl;
+    }
+
+    return 0;
+}
+```
+
+ADVANTAGES of Builder with Steps:
+==================================
+✓ Type-safe sequential construction
+✓ Impossible to skip steps (compiler prevents it)
+✓ Readable fluent interface
+✓ Mandatory steps enforced at compile-time
+✓ No invalid intermediate states possible
+✓ Self-documenting code (visible step order)
+
+DISADVANTAGES of Builder with Steps:
+=====================================
+✗ More complex to implement (need abstract classes)
+✗ Memory overhead (multiple abstract classes)
+✗ Harder to read for simple cases
+✗ Fixed step order (no flexibility for optional steps)
+✗ Not good if step order can vary
+✗ Each step requires new abstract class definition
+
+
+WHEN TO USE BUILDER WITH STEPS:
+================================
+✓ Complex multi-phase construction
+✓ Steps have fixed order
+✓ Skipping steps must be prevented
+✓ Example: Booking systems (select hotel → select room → pay)
+✓ Example: Checkout process (shipping → billing → confirm)
+
+
+================================================================================
+6. COMPREHENSIVE ADVANTAGES & DISADVANTAGES
+================================================================================
+
+ADVANTAGES (All Builder Variants):
+===================================
+
+1. ELIMINATES CONSTRUCTOR OVERLOADING
+   ✓ No more explosion of constructor combinations
+   ✓ Readable, self-documenting code
+   ✓ Easy to add new optional fields
+
+2. ENSURES OBJECT CONSISTENCY
+   ✓ Objects always created in valid state
+   ✓ Validation happens in build() method
+   ✓ No partially initialized objects
+
+3. IMMUTABLE OBJECTS
+   ✓ Objects can't be modified after creation
+   ✓ Thread-safe (no race conditions)
+   ✓ Predictable behavior
+
+4. FLUENT INTERFACE
+   ✓ Readable chaining of method calls
+   ✓ Code reads like natural language
+   ✓ Self-documenting
+
+5. SEPARATES CONSTRUCTION FROM REPRESENTATION
+   ✓ Same builder can create different objects
+   ✓ Construction logic doesn't leak into product class
+   ✓ Product class stays focused on its purpose
+
+6. EASY TO MAINTAIN
+   ✓ Add new optional field? Just add method to builder
+   ✓ Change validation? Update one place
+   ✓ No cascade of changes needed
+
+7. SCALABILITY
+   ✓ Handles objects with many optional fields
+   ✓ No combinatorial explosion with inheritance
+
+
+DISADVANTAGES (All Builder Variants):
+======================================
+
+1. CODE COMPLEXITY
+   ✗ Need to write builder class
+   ✗ More code than normal constructor
+   ✗ Overhead for simple objects with few fields
+
+2. MEMORY OVERHEAD
+   ✗ Builder object exists separately
+   ✗ Two objects in memory during construction
+   ✗ Extra memory allocation and deallocation
+
+3. PERFORMANCE IMPACT
+   ✗ Extra method calls (withField1, withField2, build)
+   ✗ Method call overhead in critical paths
+   ✗ Not suitable for performance-critical inner loops
+
+4. LEARNING CURVE
+   ✗ Developers new to pattern need training
+   ✗ Harder to debug (need to understand abstraction)
+   ✗ More moving parts
+
+
+VARIANT-SPECIFIC DISADVANTAGES:
+
+Simple Builder without Director:
+   ✗ No support for common construction patterns
+   ✗ Client code duplicates complex setup
+
+Builder with Director:
+   ✗ Extra indirection (client → Director → Builder → Product)
+   ✗ Director class needs maintenance
+   ✗ Less flexible for non-standard constructions
+
+Builder with Steps:
+   ✗ Much more complex (abstract classes)
+   ✗ Fixed step order (no flexibility)
+   ✗ Steeper learning curve
+   ✗ Only use if step enforcement is needed
+
+
+================================================================================
+7. WHEN TO USE BUILDER PATTERN
+================================================================================
+
+USE BUILDER WHEN:
+=================
+
+✓ Object has MANY optional fields
+  Example: HTTP Request (method, URL, body, timeout, ssl, headers, etc.)
+
+✓ Constructor would have too many parameters (>3-4)
+  Example: new HttpRequest(method, url, body, timeout, ssl, headers, ...)
+
+✓ Object MUST be immutable
+  Example: Configuration objects, value objects
+
+✓ Different representations of object needed
+  Example: GET request vs POST request structure
+
+✓ Need to support OPTIONAL FEATURES
+  Example: Logger can have optional file writer, console writer, database
+
+✓ Need VALIDATION during construction
+  Example: HTTP headers must include Content-Type
+
+✓ Same construction process, different products
+  Example: Director building different types of requests
+
+
+DON'T USE BUILDER WHEN:
+=======================
+
+✗ Object has only 1-2 required fields
+  Use regular constructor instead
+
+✗ All fields are required
+  Use regular constructor - builder adds no value
+
+✗ Performance is critical in tight loops
+  Builder adds overhead
+
+✗ Object is mutable anyway
+  Builder's immutability advantage is lost
+
+✗ Simple object with no optional fields
+  Overkill for simple cases
+
+
+================================================================================
+8. BUILDER PATTERN FLOW/ARCHITECTURE DIAGRAM
+================================================================================
+
+SIMPLE BUILDER WITHOUT DIRECTOR:
+=================================
+
+                            ┌──────────────────────────┐
+                            │   HttpRequest (Product)  │
+                            ├──────────────────────────┤
+                            │ - method (private)       │
+                            │ - url (private)          │
+                            │ - body (private)         │
+                            │ - timeout (private)      │
+                            │ - headers (private)      │
+                            ├──────────────────────────┤
+                            │ + getMethod()            │
+                            │ + getUrl()               │
+                            │ + getBody()              │
+                            └──────────────────────────┘
+                                       △
+                                       │ (creates)
+                                       │
+                            ┌──────────────────────────┐
+                            │  Builder (Inner Class)   │
+                            ├──────────────────────────┤
+                            │ - method               │
+                            │ - url                  │
+                            │ - body                 │
+                            │ - timeout              │
+                            │ - headers              │
+                            ├──────────────────────────┤
+                            │ + withBody()   ▶▶ Builder   │
+                            │ + withTimeout()▶▶ Builder   │
+                            │ + withSSL()    ▶▶ Builder   │
+                            │ + withHeader() ▶▶ Builder   │
+                            │ + build()      ▶ Product   │
+                            └──────────────────────────┘
+
+CLIENT USAGE:
+=============
+
+    Client Code
+        │
+        │ new Builder(method, url)
+        ▼
+    ┌────────────────────────┐
+    │ Builder Step 1:        │
+    │ Create with required   │
+    │ fields                 │
+    └────────────┬───────────┘
+                 │
+         withField1()│ Builder&
+                 │ (chain)
+                 ▼
+    ┌────────────────────────┐
+    │ Builder Step 2:        │
+    │ Optionally set         │
+    │ fields                 │
+    └────────────┬───────────┘
+                 │
+         withField2()│ Builder&
+                 │ (chain)
+                 ▼
+    ┌────────────────────────┐
+    │ Builder Step 3:        │
+    │ Call build()           │
+    │ Validate               │
+    └────────────┬───────────┘
+                 │
+           validate() Checks:
+           - Method not empty
+           - URL valid
+           - All required fields set
+           - Business rules met
+                 │
+                 ▼
+    ┌────────────────────────┐
+    │ VALID! Create          │
+    │ Immutable Product      │
+    └────────────┬───────────┘
+                 │
+                 ▼
+            Product returned
+            to client
+
+
+BUILDER WITH DIRECTOR:
+======================
+
+            ┌─────────────────┐
+            │ CLIENT          │
+            └────────┬────────┘
+                     │
+        uses Director│
+            for common│ patterns
+                     ▼
+        ┌────────────────────────┐
+        │ DIRECTOR               │
+        ├────────────────────────┤
+        │ + constructGetRequest()│
+        │ + constructPostRequest()
+        │ + constructPutRequest()│
+        │ + constructDelete()    │
+        │ (knows common patterns)│
+        └────────────┬───────────┘
+                     │
+                uses│ Builder
+                     ▼
+        ┌────────────────────────┐
+        │ BUILDER                │
+        ├────────────────────────┤
+        │ - step1: method        │
+        │ - step2: url           │
+        │ - step3: body          │
+        │ - step4: headers       │
+        ├────────────────────────┤
+        │ + build()              │
+        └────────────┬───────────┘
+                     │
+                     ▼
+        ┌────────────────────────┐
+        │ PRODUCT                │
+        │ (HttpRequest)          │
+        └────────────────────────┘
+
+
+EXAMPLE FLOW (GET Request with Director):
+
+    Director::constructGetRequest(url, token)
+           │
+           ├─ Create Builder("GET", url)
+           │
+           ├─ addCommonHeaders(builder)
+           │  ├─ User-Agent
+           │  └─ Accept
+           │
+           ├─ withHeader("Authorization", token)
+           ├─ withSSL(true)
+           ├─ withTimeout(5000)
+           │
+           └─ build()
+              ├─ Validate all fields
+              ├─ Check auth header exists
+              ├─ Check GET has no body
+              │
+              └─ ✓ SUCCESS → HttpRequest object
+
+
+BUILDER WITH STEPS:
+===================
+
+    Client: PizzaBuilder::startOrder()
+              │
+              ├─ Step 1: Choose Base
+              │   ├─ withThinCrust()    ▶ returns Step2
+              │   ├─ withThickCrust()   ▶ returns Step2
+              │   └─ withStuffedCrust() ▶ returns Step2
+              │
+              ├─ Step 2: Add Toppings (from Step1)
+              │   ├─ addCheese()     ▶ returns Step2 (chain more)
+              │   ├─ addPepperoni()  ▶ returns Step2 (chain more)
+              │   ├─ addMushrooms()  ▶ returns Step2 (chain more)
+              │   └─ done()          ▶ returns Step3
+              │
+              ├─ Step 3: Choose Drink (from Step2)
+              │   ├─ withCola()       ▶ returns Step4
+              │   ├─ withJuice()      ▶ returns Step4
+              │   └─ withWaterFree()  ▶ returns Step4
+              │
+              ├─ Step 4: Confirm (from Step3)
+              │   ├─ setQuantity()    ▶ returns Step4 (chain)
+              │   └─ confirm()        ▶ returns Pizza object
+              │
+              └─ ✓ Pizza created with all steps complete
+
+
+COMPILE-TIME SAFETY (Steps Pattern):
+
+    Can't call: startOrder().withCola()...
+                                │
+                        ERROR: Step1 doesn't have
+                        withCola() method!
+                        (It only has withThinCrust, etc)
+
+    Can't call: startOrder().withThinCrust()
+                              .setQuantity(5)...
+                                   │
+                        ERROR: Step2 doesn't have
+                        setQuantity() method!
+                        (That's only in Step4)
+
+
+================================================================================
+9. COMPARISON TABLE: BUILDER VARIANTS
+================================================================================
+
+Feature                    Simple Builder   Builder+Director   Builder+Steps
+─────────────────────────────────────────────────────────────────────────────
+Complexity                 Low              Medium             High
+Implementation effort      Easy             Medium            Hard
+Code complexity            Low              Medium            High
+Memory overhead           Medium           Medium            High
+Performance               Good             Good              Fair
+Flexibility               High             High              Low
+Common patterns support    No               Yes               N/A
+Enforced step order        No               No                YES
+Type-safety               No               No                YES (compile)
+Real-world usage          Very common      Common            Rare
+Learning curve            Easy             Medium            Hard
+Best for                  Simple complex   Common patterns   Sequential enforced
+                          objects          with variations   processes
+
+When to use each:
+─────────────────────────────────────────────────────────────────────────────
+Simple Builder:       Use for most cases - clean, flexible, easy
+Builder+Director:     Use when you have many common construction patterns
+Builder+Steps:        Use when steps must be enforced and ordered
+
+
+================================================================================
+10. KEY TAKEAWAYS
+================================================================================
+
+PROBLEM SOLVED:
+===============
+✓ Object construction with many optional fields
+✓ Eliminates constructor overloading hell
+✓ Prevents partially initialized objects
+✓ Centralizes validation logic
+✓ Makes immutable objects easier to create
+✓ Supports fluent, readable interface
+
+
+WHEN TO CHOOSE EACH VARIANT:
+=============================
+
+1. Simple Builder (No Director, No Steps):
+   - Most flexible
+   - Use when construction differs based on requirements
+   - Example: HttpRequest where each request is unique
+
+2. Builder + Director:
+   - Use when many COMMON construction patterns exist
+   - Director knows the 80% common cases
+   - Client code is simpler
+   - Example: GET/POST/PUT/DELETE HTTP requests
+
+3. Builder + Steps:
+   - Use when steps must be done in SPECIFIC ORDER
+   - Compiler prevents wrong order
+   - Enforces process integrity
+   - Example: Checkout process, multi-phase setup
+
+
+KEY DIFFERENCES FROM OTHER PATTERNS:
+=====================================
+
+Builder vs Abstract Factory:
+- Factory: "I know what to create" (decides product type)
+- Builder: "Help me build complex object" (step-by-step process)
+
+Builder vs Decorator:
+- Decorator: Add behavior to existing object (wrapping)
+- Builder: Construct complex object from scratch
+
+
+LEARN FROM THIS:
+================
+✓ Use Builder for complex construction
+✓ Use Director for common construction patterns
+✓ Use Steps when order matters
+✓ Always validate in build() method
+✓ Return *this for fluent chaining
+✓ Make product immutable after build()
+
+================================================================================
