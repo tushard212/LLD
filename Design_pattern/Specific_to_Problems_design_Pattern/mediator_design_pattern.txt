@@ -1,0 +1,788 @@
+================================================================================
+                        MEDIATOR DESIGN PATTERN
+================================================================================
+
+WHY IT WAS NEEDED
+================================================================================
+Problem: When multiple objects need to communicate with each other, creating
+direct links causes:
+- High coupling: Every object knows about every other object
+- Complex communication paths: Object A talks to B, B talks to C, C talks to A
+- Difficult to maintain: Adding new objects requires modifying all existing ones
+- Spaghetti code: Communication logic scattered everywhere
+
+Example WITHOUT Mediator:
+- 5 users in chat room = 20 direct communication channels (5×4)
+- 10 users = 90 channels (10×9)
+- 100 users = 9,900 channels!
+- Each user class needs methods to handle messages from all other users
+- Complete nightmare to manage and test
+
+Solution: Mediator Pattern centralizes all communication through ONE object
+(the mediator). Objects don't talk to each other directly; they talk to the
+mediator, which distributes messages.
+
+Result: Instead of N² connections, only N connections to the mediator!
+
+
+WHAT PROBLEM IT SOLVES
+================================================================================
+- Reduces coupling between communicating objects (colleagues)
+- Simplifies object interactions by centralizing control logic
+- Makes adding/removing objects easier
+- Communication logic is in one place (easy to modify)
+- Objects are independent and testable
+- Follows Single Responsibility Principle
+
+
+HOW IT SOLVES THE PROBLEM (CONCEPT)
+================================================================================
+1. Define Mediator interface with communication methods
+2. Create Colleagues that know the Mediator but NOT each other
+3. Create ConcreteMediator implementing communication logic
+4. Colleagues send messages to Mediator, not to other Colleagues
+5. Mediator receives messages and distributes them
+
+Instead of: userA->sendTo(userB), userB->sendTo(userC), userC->sendTo(userA)
+Use: userA->send(message, chatRoom), and chatRoom handles distribution
+
+
+CHAT ROOM EXAMPLE - ARCHITECTURE
+================================================================================
+
+           ┌──────────────────────┐
+           │  <<Interface>>       │
+           │     Mediator         │
+           ├──────────────────────┤
+           │ + sendMessage()      │
+           │ + addUser()          │
+           │ + removeUser()       │
+           └───────────┬──────────┘
+                       △
+        ┌──────────────┴──────────────┐
+        │                             │
+    ┌───────────────────┐    ┌─────────────────────┐
+    │  ConcreteMediator │    │    ChatRoomImpl      │
+    ├───────────────────┤    ├─────────────────────┤
+    │ - users[]         │    │ - participantList   │
+    ├───────────────────┤    │ - messages[]        │
+    │ + sendMessage()   │    ├─────────────────────┤
+    │ + addUser()       │    │ + sendMessage()     │
+    │ + removeUser()    │    │ + displayMessage()  │
+    └───────────────────┘    │ + broadcast()       │
+                             └─────────────────────┘
+                                    (Concrete)
+
+
+        ┌──────────────────────┐
+        │  <<Interface>>       │
+        │     Colleague        │
+        ├──────────────────────┤
+        │ + send(message)      │
+        │ + receive(message)   │
+        │ + getName()          │
+        └────────────┬─────────┘
+                     △
+         ┌───────────┼───────────┐
+         │           │           │
+    ┌────────────┐ ┌──────────┐ ┌──────────┐
+    │User Class  │ │Admin     │ │Bot       │
+    ├────────────┤ ├──────────┤ ├──────────┤
+    │- mediator  │ │-mediator │ │-mediator │
+    │- name      │ │- name    │ │- name    │
+    ├────────────┤ ├──────────┤ ├──────────┤
+    │+ send()    │ │+ send()  │ │+ send()  │
+    │+ receive() │ │+ receive │ │+ receive │
+    └────────────┘ └──────────┘ └──────────┘
+    (Concrete Colleagues - don't know about each other)
+
+
+COMMUNICATION FLOW
+================================================================================
+
+WITHOUT Mediator (Direct Communication - TIGHTLY COUPLED):
+========================================================
+
+User A ←→ User B
+  ↕       ↕
+User C ←→ User D
+  ↕       ↕
+User E
+
+Problem: User A needs to know about B, C, D, E
+         User B needs to know about A, C, D, E
+         User C needs to know about A, B, D, E
+         ... and so on (N² connections)
+
+
+WITH Mediator (Centralized Communication - LOOSELY COUPLED):
+============================================================
+
+    User A        User B        User C        User D
+        |             |             |             |
+        │             │             │             │
+        └─────┬───────┴─────┬───────┴─────────────┘
+              │             │
+              ▼             ▼
+         ┌─────────────────────────┐
+         │   CHAT ROOM MEDIATOR    │
+         │  (Centralizes messages) │
+         └─────────────────────────┘
+              │             │
+        ┌─────┴─────┬───────┴─────┐
+        │           │             │
+        ▼           ▼             ▼
+    User A      User B        User C
+
+Benefit: Each user only knows about the ChatRoom (mediator)
+         ChatRoom knows about all users
+         Total connections: Only 4 (not 12!)
+
+
+CONTROL FLOW - CHAT ROOM EXAMPLE
+================================================================================
+
+                    ┌─────────────┐
+                    │   START     │
+                    └──────┬──────┘
+                           │
+                           ▼
+           ┌───────────────────────────────────┐
+           │ Initialize ChatRoom               │
+           │ (Mediator)                        │
+           │ - users[] = empty                 │
+           │ - messages[] = empty              │
+           └───────────┬───────────────────────┘
+                       │
+                       ▼
+           ┌───────────────────────────────────┐
+           │ Create Users (Colleagues)         │
+           │ - User1: "Alice"                  │
+           │ - User2: "Bob"                    │
+           │ - User3: "Charlie"                │
+           │ - User4: "David"                  │
+           └───────────┬───────────────────────┘
+                       │
+                       ▼
+           ┌───────────────────────────────────┐
+           │ addUser(user1)                    │
+           │ ChatRoom.users[] = { Alice }      │
+           └───────────┬───────────────────────┘
+                       │
+                       ▼
+           ┌───────────────────────────────────┐
+           │ addUser(user2)                    │
+           │ ChatRoom.users[] = {Alice, Bob}   │
+           └───────────┬───────────────────────┘
+                       │
+                       ▼
+           ┌───────────────────────────────────┐
+           │ User1.send("Hello all!")          │◄─── Alice sends to ChatRoom
+           └───────────┬───────────────────────┘
+                       │
+                       ▼
+           ┌───────────────────────────────────┐
+           │ ChatRoom.sendMessage(             │
+           │   from: Alice,                    │
+           │   message: "Hello all!"           │
+           │ )                                 │
+           └───────────┬───────────────────────┘
+                       │
+           ┌───────────┴───────────┐
+           │                       │
+           ▼                       ▼
+  ┌──────────────────┐   ┌──────────────────┐
+  │ Broadcast all    │   │ Store message    │
+  │ online users     │   │ in history       │
+  │                  │   │                  │
+  │ user1.receive()  │   │ Format:          │
+  │ user2.receive()  │   │ "Alice: Hello.."│
+  │ user3.receive()  │   │                  │
+  │ user4.receive()  │   │                  │
+  └──────────────────┘   └──────────────────┘
+           │                       │
+           └───────────┬───────────┘
+                       │
+                       ▼
+           ┌───────────────────────────────────┐
+           │ Users receive message from        │
+           │ ChatRoom (not directly from Alice)│
+           │                                   │
+           │ Alice: Display in own chat        │
+           │ Bob: Print "Alice: Hello all!"    │
+           │ Charlie: Print "Alice: Hello all!"
+           │ David: Print "Alice: Hello all!"  │
+           └───────────┬───────────────────────┘
+                       │
+                       ▼
+           ┌───────────────────────────────────┐
+           │ User2.send("Hi Alice!")           │◄─── Bob sends to ChatRoom
+           └───────────┬───────────────────────┘
+                       │
+                       ▼
+           ┌───────────────────────────────────┐
+           │ ChatRoom.sendMessage(             │
+           │   from: Bob,                      │
+           │   message: "Hi Alice!"            │
+           │ )                                 │
+           └───────────┬───────────────────────┘
+                       │
+           ┌───────────┴───────────┐
+           │                       │
+           ▼                       ▼
+  ┌──────────────────┐   ┌──────────────────┐
+  │ Broadcast all    │   │ Store message    │
+  │ online users     │   │                  │
+  └──────────────────┘   └──────────────────┘
+           │                       │
+           └───────────┬───────────┘
+                       │
+                       ▼
+           ┌───────────────────────────────────┐
+           │ All users receive Bob's message   │
+           └───────────┬───────────────────────┘
+                       │
+                       ▼
+           ┌───────────────────────────────────┐
+           │ removeUser(user4) [David leaves]  │
+           │ ChatRoom.users[] = {Alice,Bob,..} │
+           └───────────┬───────────────────────┘
+                       │
+                       ▼
+           ┌───────────────────────────────────┐
+           │ Continue operations or END        │
+           └─────────────────────────────────────┘
+
+
+ADVANTAGES
+================================================================================
+
+1. REDUCES COUPLING
+   - Colleagues don't know about each other
+   - Only know about the mediator
+   - Easy to add/remove colleagues without changing others
+   - Objects are more reusable
+
+2. CENTRALIZES CONTROL LOGIC
+   - All communication logic in one place (Mediator)
+   - Easy to modify/debug communication rules
+   - Single point of change
+   - Easier to understand overall flow
+
+3. SIMPLIFIES OBJECT DESIGN
+   - Each colleague is simpler (only talks to mediator)
+   - Doesn't need to know about other colleagues
+   - Reduced complexity per object
+   - Easier to test each object in isolation
+
+4. FOLLOWS SINGLE RESPONSIBILITY PRINCIPLE
+   - Mediator handles communication
+   - Colleagues handle their own business logic
+   - Clear separation of concerns
+
+5. FLEXIBLE COMMUNICATION STRATEGIES
+   - Change mediator behavior without changing colleagues
+   - Easy to implement different routing/filtering strategies
+   - Can add features like message logging, filtering, etc.
+
+6. CENTRALIZED STATE MANAGEMENT
+   - Mediator can manage state of all colleagues
+   - Easy to validate interactions
+   - Better control over system behavior
+
+7. EASIER TO TEST
+   - Mock the mediator for unit testing colleagues
+   - Test communication logic independently
+   - No need to set up complex object graphs
+
+8. SCALES BETTER
+   - 100 users: 100 connections to mediator (not 9,900!)
+   - Linear growth instead of exponential
+
+
+DISADVANTAGES
+================================================================================
+
+1. MEDIATOR BECOMES COMPLEX
+   - Can grow into a "God Object" with too many responsibilities
+   - Might become harder to maintain than direct communication
+   - Risk of putting all logic in one place
+   - Can become a bottleneck
+
+2. SINGLE POINT OF FAILURE
+   - If mediator fails, entire system breaks
+   - No direct communication between colleagues as backup
+   - All communication depends on mediator being functional
+
+3. DIFFICULT TO EXTEND MEDIATOR
+   - Adding new interaction types requires modifying mediator
+   - Can violate Open-Closed Principle if not designed carefully
+   - Risk of mediator becoming too tightly coupled to specific colleagues
+
+4. HIDDEN COMPLEXITY
+   - Communication flow is not immediately obvious from looking at colleague code
+   - Have to look at mediator to understand how objects interact
+   - Makes code harder to follow/debug
+
+5. PERFORMANCE OVERHEAD
+   - Extra indirection: colleague → mediator → other colleagues
+   - Message passing through mediator adds latency
+   - Not suitable for real-time systems requiring minimal latency
+
+6. CAN BE OVERKILL FOR SIMPLE CASES
+   - For 2-3 objects with simple communication, adds unnecessary complexity
+   - Might be premature optimization
+   - Over-engineering simple problems
+
+7. AFFECTS TESTING
+   - Need complete understanding of mediator to mock it properly
+   - Integration testing can be complex
+   - Unit tests might need complex mediator stubs
+
+
+WHEN TO USE
+================================================================================
+
+✓ Use when: Multiple objects need complex interactions
+✓ Use when: Communication between objects is intricate
+✓ Use when: You want to reduce coupling significantly
+✓ Use when: Behavior depends on how objects interact
+✓ Use when: Adding new objects causes cascading changes
+✓ Use when: Business rules determine object interactions
+
+✗ Don't use when: Objects have very simple, one-off relationships
+✗ Don't use when: Real-time system with strict latency requirements
+✗ Don't use when: Only 1-2 objects communicating
+✗ Don't use when: Communication is unidirectional (use Observer instead)
+
+
+REAL-WORLD EXAMPLES
+================================================================================
+
+1. CHAT ROOMS (Our example)
+   - Mediator: ChatRoom
+   - Colleagues: Users
+   - Communication: Users send messages through ChatRoom
+
+2. AIRPLANE CONTROL TOWER
+   - Mediator: Control Tower
+   - Colleagues: Airplanes
+   - Communication: Planes request landing/takeoff through tower
+
+3. DIALOG BOX WITH INTERDEPENDENT CONTROLS
+   - Mediator: DialogBox
+   - Colleagues: Buttons, TextFields, Labels
+   - Communication: State changes in one control affect others
+
+4. TRAFFIC LIGHT CONTROL SYSTEM
+   - Mediator: TrafficController
+   - Colleagues: TrafficLights at intersections
+   - Communication: Lights coordinate through controller
+
+5. AIRLINE RESERVATION SYSTEM
+   - Mediator: ReservationSystem
+   - Colleagues: Passengers, Flights, Seats
+   - Communication: System coordinates between entities
+
+6. MULTIPLAYER GAME SERVER
+   - Mediator: GameServer
+   - Colleagues: Players
+   - Communication: Server coordinates all player actions
+
+7. AUCTION SYSTEM
+   - Mediator: Auctioneer
+   - Colleagues: Bidders
+   - Communication: Bidders bid through auctioneer
+
+
+OBSERVER vs MEDIATOR PATTERN - KEY DIFFERENCES
+================================================================================
+
+┌─────────────────────┬──────────────────────┬──────────────────────────┐
+│ Aspect              │ OBSERVER             │ MEDIATOR                 │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ RELATIONSHIP        │ One-to-Many          │ Many-to-Many             │
+│                     │ (1 Subject → N Obs)  │ (All talk through mediator)
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ COMMUNICATION       │ One-directional      │ Multi-directional        │
+│ DIRECTION           │ Subject → Observers  │ All ↔ All (through med.) │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ KNOWLEDGE           │ Observers know Subject
+│                     │ Subject knows Observ │ Objects only know mediator
+│                     │ Bidirectional        │ Objects don't know each other
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ COUPLING            │ Subject-Observer     │ All colleagues tightly   │
+│                     │ are coupled          │ coupled through mediator │
+│                     │ Loose coupling       │ But indirect coupling    │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ USE CASE            │ Model notifies Views │ Complex multi-object     │
+│ EXAMPLE             │ Button notifies      │ Chat room coordination   │
+│                     │ multiple handlers    │ Dialog box controls      │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ FLOW                │ Subject → Observer1  │ Object1 → Mediator       │
+│                     │              ↙       │              ↙           │
+│                     │         Observer2    │ Mediator → Object2       │
+│                     │              ↙       │              ↚           │
+│                     │         Observer3    │ Object3 ← Mediator       │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ SCALABILITY         │ Good: 1 Subject,     │ Good: N Objects,         │
+│                     │ many observers OK    │ linear growth            │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ MEDIATOR ROLE       │ Subject is active    │ Mediator is active       │
+│ ACTIVITY            │ "Pull" model usually │ "Push" model, controls   │
+│                     │ (observers ask)      │ all interactions         │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ WHEN TO USE         │ Event propagation    │ Complex inter-object     │
+│                     │ MVC architecture     │ communication            │
+│                     │ Event listeners      │ Dialog box controls      │
+└─────────────────────┴──────────────────────┴──────────────────────────┘
+
+SIMPLE COMPARISON:
+==================
+
+OBSERVER: "I (Subject) will notify you (Observers) when something changes"
+MEDIATOR: "All of you (Colleagues) talk to me (Mediator), I'll handle it"
+
+OBSERVER: One responsible entity (Subject) notifies many (Observers)
+MEDIATOR: One coordinator (Mediator) manages communication between many equals
+
+OBSERVER: Primarily for notification and state change propagation
+MEDIATOR: Primarily for complex coordination and control of interactions
+
+EXAMPLE SCENARIOS:
+
+Observer Pattern Scenario:
+- Stock Market: Stock (subject) notifies all Investors (observers)
+- UI: Button (subject) notifies all Listeners (observers)
+- Event System: Events notify interested parties
+
+Mediator Pattern Scenario:
+- Chat Room: Users don't talk to each other, talk through ChatRoom
+- Dialog Box: Button, TextField, Label all coordinate through Dialog
+- Traffic System: Lights don't coordinate directly, Control Tower mediates
+
+
+C++ EXAMPLE - CHAT ROOM
+================================================================================
+
+#include <iostream>
+#include <vector>
+#include <string>
+#include <memory>
+#include <algorithm>
+#include <ctime>
+using namespace std;
+
+// Forward declarations
+class User;
+
+// ─────────────────────────────────────────────
+// 1. Abstract Mediator
+// ─────────────────────────────────────────────
+class ChatRoomMediator {
+public:
+    virtual ~ChatRoomMediator() = default;
+    virtual void sendMessage(const string& message, User* sender) = 0;
+    virtual void addUser(User* user) = 0;
+    virtual void removeUser(User* user) = 0;
+    virtual void displayUsers() const = 0;
+};
+
+// ─────────────────────────────────────────────
+// 2. Abstract Colleague
+// ─────────────────────────────────────────────
+class User {
+protected:
+    string name;
+    ChatRoomMediator* chatRoom;
+
+public:
+    User(const string& name, ChatRoomMediator* room)
+        : name(name), chatRoom(room) {}
+
+    virtual ~User() = default;
+
+    string getName() const { return name; }
+
+    virtual void send(const string& message) {
+        cout << name << " sends: " << message << "\n";
+        chatRoom->sendMessage(message, this);
+    }
+
+    virtual void receive(const string& message, const string& sender) {
+        cout << "  [" << name << " receives from " << sender << "]: "
+             << message << "\n";
+    }
+};
+
+// ─────────────────────────────────────────────
+// 3. Concrete Mediator - ChatRoom
+// ─────────────────────────────────────────────
+class ConcreteChat : public ChatRoomMediator {
+private:
+    vector<User*> users;
+
+public:
+    void addUser(User* user) override {
+        users.push_back(user);
+        cout << "[ChatRoom] " << user->getName() << " joined the room\n";
+    }
+
+    void removeUser(User* user) override {
+        users.erase(
+            remove(users.begin(), users.end(), user),
+            users.end()
+        );
+        cout << "[ChatRoom] " << user->getName() << " left the room\n";
+    }
+
+    void sendMessage(const string& message, User* sender) override {
+        cout << "[ChatRoom] Broadcasting message from " << sender->getName()
+             << " to all users...\n";
+
+        for (User* user : users) {
+            if (user != sender) {  // Don't send to sender
+                user->receive(message, sender->getName());
+            }
+        }
+    }
+
+    void displayUsers() const override {
+        cout << "[ChatRoom] Active users: ";
+        for (const auto* user : users) {
+            cout << user->getName() << " ";
+        }
+        cout << "\n";
+    }
+};
+
+// ─────────────────────────────────────────────
+// 4. Concrete Colleagues
+// ─────────────────────────────────────────────
+
+class RegularUser : public User {
+public:
+    RegularUser(const string& name, ChatRoomMediator* room)
+        : User(name, room) {}
+
+    void send(const string& message) override {
+        cout << "[Regular] " << name << " sends: " << message << "\n";
+        chatRoom->sendMessage(message, this);
+    }
+};
+
+class AdminUser : public User {
+public:
+    AdminUser(const string& name, ChatRoomMediator* room)
+        : User(name, room) {}
+
+    void send(const string& message) override {
+        cout << "[Admin] " << name << " announces: " << message << "\n";
+        chatRoom->sendMessage("[ADMIN] " + message, this);
+    }
+
+    void kick(User* user) {
+        cout << "[Admin] " << name << " has kicked " << user->getName()
+             << " from chat\n";
+        chatRoom->removeUser(user);
+    }
+};
+
+// ─────────────────────────────────────────────
+// 5. Client Code
+// ─────────────────────────────────────────────
+int main() {
+    cout << "================== MEDIATOR PATTERN ==================\n";
+    cout << "         Chat Room Example\n\n";
+
+    // Create mediator (ChatRoom)
+    ConcreteChat chatRoom;
+
+    // Create colleagues (Users)
+    RegularUser alice("Alice", &chatRoom);
+    RegularUser bob("Bob", &chatRoom);
+    RegularUser charlie("Charlie", &chatRoom);
+    AdminUser admin("Admin", &chatRoom);
+
+    // Users join chat room
+    cout << "--- Users Joining Chat Room ---\n";
+    chatRoom.addUser(&alice);
+    chatRoom.addUser(&bob);
+    chatRoom.addUser(&charlie);
+    chatRoom.addUser(&admin);
+    chatRoom.displayUsers();
+    cout << "\n";
+
+    // Users send messages
+    cout << "--- Communication Through Mediator ---\n";
+    alice.send("Hello everyone!");
+    cout << "\n";
+
+    bob.send("Hi Alice!");
+    cout << "\n";
+
+    admin.send("Welcome to our chat!");
+    cout << "\n";
+
+    charlie.send("Thanks for the welcome!");
+    cout << "\n";
+
+    // Admin kicks a user
+    cout << "--- Admin Action ---\n";
+    admin.kick(&charlie);
+    chatRoom.displayUsers();
+    cout << "\n";
+
+    // More messages
+    cout << "--- After Charlie Left ---\n";
+    alice.send("Where did Charlie go?");
+    cout << "\n";
+
+    // User leaves voluntarily
+    cout << "--- Voluntary Leave ---\n";
+    chatRoom.removeUser(&bob);
+    chatRoom.displayUsers();
+
+    return 0;
+}
+
+
+OUTPUT EXAMPLE
+================================================================================
+
+================== MEDIATOR PATTERN ==================
+         Chat Room Example
+
+--- Users Joining Chat Room ---
+[ChatRoom] Alice joined the room
+[ChatRoom] Bob joined the room
+[ChatRoom] Charlie joined the room
+[ChatRoom] Admin joined the room
+[ChatRoom] Active users: Alice Bob Charlie Admin
+
+--- Communication Through Mediator ---
+[Regular] Alice sends: Hello everyone!
+[ChatRoom] Broadcasting message from Alice to all users...
+  [Bob receives from Alice]: Hello everyone!
+  [Charlie receives from Alice]: Hello everyone!
+  [Admin receives from Alice]: Hello everyone!
+
+[Regular] Bob sends: Hi Alice!
+[ChatRoom] Broadcasting message from Bob to all users...
+  [Alice receives from Bob]: Hi Alice!
+  [Charlie receives from Bob]: Hi Alice!
+  [Admin receives from Bob]: Hi Alice!
+
+[Admin] Admin announces: Welcome to our chat!
+[ChatRoom] Broadcasting message from Admin to all users...
+  [Alice receives from Admin]: [ADMIN] Welcome to our chat!
+  [Bob receives from Admin]: [ADMIN] Welcome to our chat!
+  [Charlie receives from Admin]: [ADMIN] Welcome to our chat!
+
+[Regular] Charlie sends: Thanks for the welcome!
+[ChatRoom] Broadcasting message from Charlie to all users...
+  [Alice receives from Charlie]: Thanks for the welcome!
+  [Bob receives from Charlie]: Thanks for the welcome!
+  [Admin receives from Charlie]: Thanks for the welcome!
+
+--- Admin Action ---
+[Admin] Admin has kicked Charlie from chat
+[ChatRoom] Charlie left the room
+[ChatRoom] Active users: Alice Bob Admin
+
+--- After Charlie Left ---
+[Regular] Alice sends: Where did Charlie go?
+[ChatRoom] Broadcasting message from Alice to all users...
+  [Bob receives from Alice]: Where did Charlie go?
+  [Admin receives from Alice]: Where did Charlie go?
+
+--- Voluntary Leave ---
+[ChatRoom] Bob left the room
+[ChatRoom] Active users: Alice Admin
+
+
+KEY DIFFERENCES: OBSERVER vs MEDIATOR
+================================================================================
+
+┌────────────────────────────────────────────────────────────────────┐
+│                        OBSERVER PATTERN                            │
+├────────────────────────────────────────────────────────────────────┤
+│ Structure:     Subject has list of Observers                       │
+│ Flow:          Subject → broadcast to all Observers                │
+│ Coupling:      Loose between Subject and Observers                 │
+│ Knowledge:     Observers know Subject exists                       │
+│                Subject knows Observers exist                       │
+│ Use Case:      Stock prices change → notify all investors          │
+│                Button click → notify all listeners                 │
+└────────────────────────────────────────────────────────────────────┘
+
+Chat Room with Observer (WRONG APPROACH):
+===========================================================================
+Alice ──→ Bob (Alice sends directly)
+Alice ──→ Charlie
+Alice ──→ David
+
+Problem: Each user is both Subject AND Observer
+         Complexity explodes with many users
+         Tightly coupled to other users
+
+
+┌────────────────────────────────────────────────────────────────────┐
+│                        MEDIATOR PATTERN                            │
+├────────────────────────────────────────────────────────────────────┤
+│ Structure:     Mediator has references to all Colleagues           │
+│ Flow:          Colleague → Mediator → all other Colleagues        │
+│ Coupling:      Loose between Colleagues (indirectly coupled)       │
+│ Knowledge:     Colleagues know Mediator exists                     │
+│                Mediator knows all Colleagues exist                 │
+│ Use Case:      Users don't contact each other → use ChatRoom      │
+│                Dialog controls don't interact → use Dialog         │
+└────────────────────────────────────────────────────────────────────┘
+
+Chat Room with Mediator (CORRECT APPROACH):
+===========================================================================
+    Alice ─┐
+    Bob   ─┤── ChatRoom (Mediator) ──→ All users
+    Charlie|
+    David ─┘
+
+Benefit: Clean separation, linear communication paths
+         Easy to add/remove users
+         Business logic in one place
+
+
+COMPARISON TABLE - At a Glance
+================================================================================
+
+Feature               Observer              Mediator
+────────────────────────────────────────────────────────────────
+Primary intent        Event notification    Complex coordination
+Message direction     One → Many            Many ↔ Many (via mediator)
+Object relationships  Loose                 Indirect coupling
+Number of objects     1 Subject + Observers Many equals
+Complexity level      Low to Medium         Medium to High
+When state changes    Subject has it        Mediator manages it
+Communication type    Push (notify)         Request-Response
+Example               Stock ticker          Chat room
+GUI example           Button events         Dialog coordination
+Scalability           Linear                Linear (managed)
+Maintenance           Easy                  Medium
+
+
+KEY TAKEAWAYS
+================================================================================
+
+1. Mediator Pattern centralizes communication between multiple objects
+2. Colleagues only know about the Mediator, not about each other
+3. Reduces coupling by centralizing control logic
+4. Observer: One-to-many notification (Subject → Observers)
+5. Mediator: Many-to-many coordination (All ↔ Mediator ↔ All)
+6. Mediator stores/manages references to all colleagues
+7. Observer: Observers store reference to Subject
+8. Use Mediator for complex multi-way communication
+9. Use Observer for simple one-way event propagation
+10. Mediator can become a "God Object" if not careful
+11. Both reduce coupling but in different ways
+12. Choose based on communication pattern, not just reduced coupling
+
+================================================================================
