@@ -1,0 +1,558 @@
+================================================================================
+                           STATE DESIGN PATTERN
+================================================================================
+
+WHY IT WAS NEEDED
+================================================================================
+Problem: When an object's behavior depends on its state and must change at 
+runtime, code becomes complex with many if-else/switch statements. Adding new 
+states requires modifying existing code, breaking the Open-Closed Principle.
+
+Example without State Pattern:
+- Vending machine with 100+ conditional statements
+- Each action (insertCoin, selectItem, dispense) checks current state
+- Adding a new state requires modifying all action methods
+- Hard to maintain and prone to bugs
+
+Solution: State Pattern encapsulates behavior for each state in separate classes.
+State transitions and behavior are managed by state objects, not the context.
+
+
+WHAT PROBLEM IT SOLVES
+================================================================================
+- Simplifies objects with complex state-dependent behavior
+- Eliminates large conditional statements
+- Makes adding new states easier
+- Improves maintainability and follows Open-Closed Principle
+- Each state is independently testable
+
+
+HOW IT SOLVES THE PROBLEM (CONCEPT)
+================================================================================
+1. Define a State interface with methods for each action
+2. Create concrete state classes implementing state-specific behavior
+3. Context holds a reference to current state and delegates to it
+4. State objects handle transitions to other states
+5. Behavior changes by changing the state reference
+
+Instead of: if (state == "noCoin") { ... } else if (state == "hasCoin") { ... }
+Use: currentState->insertCoin(this);  ← Polymorphism decides which state acts
+
+
+VENDING MACHINE EXAMPLE - STATES
+================================================================================
+
+State:  NO_COIN_STATE
+Used:   When machine starts or after coin is returned
+        Customer hasn't inserted any money yet
+Action: - insertCoin: Insert 5 or 10 rupees → transition to HAS_COIN_STATE
+        - selectItem: Not allowed (error: "Please insert coin first")
+
+State:  HAS_COIN_STATE
+Used:   After customer inserts coin
+        Machine has enough money to dispense
+Action: - insertCoin: Insert more coins (cumulative)
+        - selectItem: Select item → transition to DISPENSE_STATE
+        - returnCoin: Return all money → transition to NO_COIN_STATE
+
+State:  DISPENSE_STATE
+Used:   After item is selected and coin is sufficient
+        Machine is dispensing the item
+Action: - dispense: Release item
+        - Check if item available:
+          If YES:  Release item → transition to NO_COIN_STATE
+          If NO:  Transition to SOLD_OUT_STATE
+
+State:  SOLD_OUT_STATE
+Used:   When item is out of stock
+Action: - returnCoin: Return money to customer → transition to NO_COIN_STATE
+        - selectItem: Show "Item sold out" message
+
+State:  RETURN_COIN_STATE
+Used:   When customer wants refund before dispensing
+Action: - returnCoin: Release coins and go → transition to NO_COIN_STATE
+
+
+CLASS FLOW / ARCHITECTURE
+================================================================================
+
+        ┌──────────────────────┐
+        │  <<Interface>>       │
+        │     VendingState     │
+        ├──────────────────────┤
+        │ + insertCoin()       │
+        │ + selectItem()       │
+        │ + dispense()         │
+        │ + returnCoin()       │
+        └────────────┬─────────┘
+                     △
+         ┌───────────┼───────────────┬──────────────┐
+         │           │               │              │
+    ┌─────────────┐ ┌──────────────┐ ┌────────────┐ ┌───────────────┐
+    │ NoCoinState │ │ HasCoinState │ │DispenseS.. │ │ SoldOutState  │
+    ├─────────────┤ ├──────────────┤ ├────────────┤ ├───────────────┤
+    │ + insert()  │ │ + insert()   │ │ + dispense │ │ + returnCoin()│
+    │ + select()= │ │ + select()   │ │ + itemOK() │ │ + insert()=err│
+    │ + dispense()│ │ + return()   │ │ + itemNOT()│ │               │
+    │ + return()= │ │ + dispense() │ │ + return() │ │               │
+    └─────────────┘ └──────────────┘ └────────────┘ └───────────────┘
+    (Concrete States - each implements specific behavior)
+
+        ┌──────────────────────────────────────┐
+        │        VendingMachine                │
+        │       (Context)                      │
+        ├──────────────────────────────────────┤
+        │ - currentState: VendingState*        │ ← Delegates to
+        │ - money: int                         │   current state
+        │ - items: map<itemId, quantity>       │
+        ├──────────────────────────────────────┤
+        │ + setCurrentState(state)             │
+        │ + insertCoin(amount)                 │◄─── Client calls
+        │ + selectItem(itemId)                 │
+        │ + dispense(itemId)                   │
+        │ + returnCoin()                       │
+        └──────────────────────────────────────┘
+                      │
+                      │ delegates
+                      ▼
+              currentState->insertCoin()
+              (or other methods)
+
+
+CONTROL FLOW DIAGRAM
+================================================================================
+
+                    ┌─────────────┐
+                    │   START     │
+                    └──────┬──────┘
+                           │
+                           ▼
+                 ┌─────────────────────┐
+                 │  NO_COIN_STATE      │
+          ┌─────→  (Waiting for coin)  │
+          │      └──────┬──────────┬───┘
+          │             │          │
+        RETURN        INSERT      SELECT
+        COIN           COIN       ITEM
+          │             │       (Error)
+          │             ▼
+          │     ┌──────────────────┐
+          │     │  HAS_COIN_STATE  │────────┐
+          │     │ (Money inserted)  │        │
+          │     └──────┬───┬──┬-----┘        │
+          │            │   │  │             │
+          │          INSERT RETURN SELECT   DISPENSE
+          │          MORE    COIN   ITEM    (Start)
+          │          COIN      │      │
+          │            │       │      ▼
+          │            │       │  ┌──────────────────┐
+          │            └───────┤─→│ DISPENSE_STATE   │
+          │                    │  │ (Dispensing item) │
+          │                    │  └────┬──────────┬───┘
+          │                    │       │          │
+          │                  RETURN  Item Not   Item
+          │                  COIN    Available  Available
+          │                    │       │          │
+          │                    │       ▼          ▼
+          │                    │  ┌─────────────┐  │
+          │                    └─→│SOLD_OUT_STATE ──┘
+          │    ┌────────────────→│ (Out of stock)  │
+          │    │                 └────────┬────────┘
+          │    │                          │
+          │    │                        RETURN
+          │    │                        COIN
+          │    │                          │
+          └────┴──────────────────────────┘
+
+
+FLOW DESCRIPTION
+================================================================================
+
+1. Machine starts → Enter NO_COIN_STATE
+2. Customer insertCoin(5) → If valid, transition to HAS_COIN_STATE
+3. Customer selectItem("COKE") → Check inventory
+   a) If item available: transition to DISPENSE_STATE
+   b) If item not available: transition to SOLD_OUT_STATE
+4. In DISPENSE_STATE: dispense() → Release item → Back to NO_COIN_STATE
+5. At any time from HAS_COIN_STATE: returnCoin() → Return money → NO_COIN_STATE
+6. In SOLD_OUT_STATE: returnCoin() → Return money → NO_COIN_STATE
+
+Key: State objects control which transitions are allowed!
+
+
+ADVANTAGES
+================================================================================
+
+1. ELIMINATES COMPLEX CONDITIONALS
+   - No more massive if-else or switch statements
+   - Each state handles its own behavior
+   - Code is cleaner and easier to read
+
+2. FOLLOWS SINGLE RESPONSIBILITY PRINCIPLE
+   - Each state class has ONE responsibility
+   - VendingMachine doesn't know about state logic
+   - States know their own rules
+
+3. FOLLOWS OPEN-CLOSED PRINCIPLE
+   - Open for extension: Add new states without modifying existing ones
+   - Closed for modification: Don't change VendingMachine class
+   - Just create new state classes
+
+4. EASY TO ADD NEW STATES
+   - Create new class implementing VendingState interface
+   - Define transition logic in that state
+   - Machine automatically supports it
+
+5. STATE TRANSITIONS ARE EXPLICIT
+   - Each state knows which states it can transition to
+   - No ambiguous transitions
+   - Easy to debug state flow
+
+6. EASIER TO TEST
+   - Mock state objects for unit testing
+   - Test each state behavior independently
+   - No need to set up complex object state
+
+7. RUNTIME BEHAVIOR CHANGES
+   - Object behavior changes just by changing state reference
+   - No need to modify instance variables scattered everywhere
+
+
+DISADVANTAGES
+================================================================================
+
+1. INCREASES NUMBER OF CLASSES
+   - One class per state can mean many classes
+   - Example: Vending machine with 5 states = 6 classes (5 states + context)
+   - Can feel over-engineered for simple cases
+
+2. INCREASED COMPLEXITY
+   - Not suitable for objects with only 1 or 2 states
+   - Learning curve for developers unfamiliar with pattern
+   - Overkill if state transitions are trivial
+
+3. MEMORY OVERHEAD
+   - Each state object requires memory
+   - Multiple instances of state objects in memory
+   - Not ideal for memory-constrained environments
+
+4. REQUIRES STATE INTERFACE
+   - Defining common interface for all states can be difficult
+   - Some methods might not make sense for all states
+   - Forces empty implementations or exceptions
+
+5. SHARED CONTEXT COMPLEXITY
+   - All states must have reference to context (VendingMachine)
+   - Context needs to be passed to state methods
+   - Can lead to circular dependency understanding
+
+6. HARDER TO DEBUG STATE TRANSITIONS
+   - State transitions happen through state objects
+   - Stack trace might not clearly show who caused transition
+   - Requires understanding of state machine design
+
+
+WHEN TO USE
+================================================================================
+
+✓ Use when: Object behavior depends on state and changes at runtime
+✓ Use when: Multiple large conditional statements based on state
+✓ Use when: New states will be added in future (frequent changes)
+✓ Use when: State transitions are complex
+✓ Use when: Each state has different set of allowed operations
+
+✗ Don't use when: Object has only 1-2 states
+✗ Don't use when: State never changes after initialization
+✗ Don't use when: Code is simple with minimal conditionals
+
+
+REAL-WORLD EXAMPLES
+================================================================================
+
+1. VENDING MACHINE (Our example)
+   States: NoCoin, HasCoin, Dispensing, SoldOut, Returning
+
+2. ORDER PROCESSING SYSTEM
+   States: Pending, Processing, Shipped, Delivered, Cancelled, Refunded
+
+3. MEDIA PLAYER
+   States: Stopped, Playing, Paused, FastForwarding, Rewinding
+
+4. TCP CONNECTION
+   States: Established, Listen, Closed, TimeWait, SynSent
+
+5. GAME CHARACTER
+   States: Idle, Walking, Running, Jumping, Attacking, Dead
+
+6. WORKFLOW ENGINE
+   States: Draft, Submitted, Approved, Rejected, Published
+
+7. LOAN APPROVAL PROCESS
+   States: New, Submitted, UnderReview, Approved, Rejected, Funded
+
+
+C++ EXAMPLE - VENDING MACHINE
+================================================================================
+
+#include <iostream>
+#include <memory>
+#include <map>
+using namespace std;
+
+// Forward declarations
+class VendingMachine;
+
+// ─────────────────────────────────────────────
+// 1. Abstract State
+// ─────────────────────────────────────────────
+class VendingState {
+public:
+    virtual ~VendingState() = default;
+    virtual void insertCoin(VendingMachine* machine, int amount) = 0;
+    virtual void selectItem(VendingMachine* machine, const string& item) = 0;
+    virtual void dispense(VendingMachine* machine, const string& item) = 0;
+    virtual void returnCoin(VendingMachine* machine) = 0;
+};
+
+// ─────────────────────────────────────────────
+// 2. Concrete States
+// ─────────────────────────────────────────────
+
+class NoCoinState : public VendingState {
+public:
+    void insertCoin(VendingMachine* machine, int amount) override;
+    void selectItem(VendingMachine* machine, const string& item) override {
+        cout << "[NO_COIN] Please insert coin first!\n";
+    }
+    void dispense(VendingMachine* machine, const string& item) override {
+        cout << "[NO_COIN] Cannot dispense without coin!\n";
+    }
+    void returnCoin(VendingMachine* machine) override {
+        cout << "[NO_COIN] No coin to return!\n";
+    }
+};
+
+class HasCoinState : public VendingState {
+public:
+    void insertCoin(VendingMachine* machine, int amount) override;
+    void selectItem(VendingMachine* machine, const string& item) override;
+    void dispense(VendingMachine* machine, const string& item) override {
+        cout << "[HAS_COIN] Must select item first!\n";
+    }
+    void returnCoin(VendingMachine* machine) override;
+};
+
+class DispenseState : public VendingState {
+public:
+    void insertCoin(VendingMachine* machine, int amount) override {
+        cout << "[DISPENSE] Cannot add coin while dispensing!\n";
+    }
+    void selectItem(VendingMachine* machine, const string& item) override {
+        cout << "[DISPENSE] Already dispensing!\n";
+    }
+    void dispense(VendingMachine* machine, const string& item) override;
+    void returnCoin(VendingMachine* machine) override {
+        cout << "[DISPENSE] Cannot return coin while dispensing!\n";
+    }
+};
+
+class SoldOutState : public VendingState {
+public:
+    void insertCoin(VendingMachine* machine, int amount) override {
+        cout << "[SOLD_OUT] Item is sold out!\n";
+    }
+    void selectItem(VendingMachine* machine, const string& item) override {
+        cout << "[SOLD_OUT] This item is not available!\n";
+    }
+    void dispense(VendingMachine* machine, const string& item) override {
+        cout << "[SOLD_OUT] Cannot dispense!\n";
+    }
+    void returnCoin(VendingMachine* machine) override;
+};
+
+// ─────────────────────────────────────────────
+// 3. Context - VendingMachine
+// ─────────────────────────────────────────────
+class VendingMachine {
+private:
+    unique_ptr<VendingState> currentState;
+    int totalMoney;
+    map<string, int> inventory;  // item -> quantity
+
+public:
+    VendingMachine()
+        : currentState(make_unique<NoCoinState>()), totalMoney(0) {
+        inventory["COKE"] = 10;
+        inventory["PEPSI"] = 5;
+        inventory["WATER"] = 8;
+    }
+
+    void setCurrentState(unique_ptr<VendingState> state) {
+        currentState = move(state);
+    }
+
+    void insertCoin(int amount) {
+        currentState->insertCoin(this, amount);
+    }
+
+    void selectItem(const string& item) {
+        currentState->selectItem(this, item);
+    }
+
+    void dispense(const string& item) {
+        currentState->dispense(this, item);
+    }
+
+    void returnCoin() {
+        currentState->returnCoin(this);
+    }
+
+    int getTotalMoney() const { return totalMoney; }
+    void setTotalMoney(int amount) { totalMoney = amount; }
+    void addMoney(int amount) { totalMoney += amount; }
+
+    int getItemCount(const string& item) {
+        return inventory[item];
+    }
+
+    void decreaseItemCount(const string& item) {
+        inventory[item]--;
+    }
+
+    void displayState() const {
+        cout << "[MONEY: " << totalMoney << "]\n";
+    }
+};
+
+// ─────────────────────────────────────────────
+// 4. State Implementations
+// ─────────────────────────────────────────────
+
+void NoCoinState::insertCoin(VendingMachine* machine, int amount) {
+    cout << "[NO_COIN] Coin inserted: " << amount << " rupees\n";
+    machine->setTotalMoney(amount);
+    machine->setCurrentState(make_unique<HasCoinState>());
+}
+
+void HasCoinState::insertCoin(VendingMachine* machine, int amount) {
+    cout << "[HAS_COIN] More coin inserted: " << amount << " rupees\n";
+    machine->addMoney(amount);
+}
+
+void HasCoinState::selectItem(VendingMachine* machine, const string& item) {
+    if (machine->getTotalMoney() < 10) {
+        cout << "[HAS_COIN] Not enough money! You have: " 
+             << machine->getTotalMoney() << "\n";
+        return;
+    }
+
+    if (machine->getItemCount(item) > 0) {
+        cout << "[HAS_COIN] Item selected: " << item << "\n";
+        machine->setCurrentState(make_unique<DispenseState>());
+        machine->dispense(item);
+    } else {
+        cout << "[HAS_COIN] Item " << item << " is sold out!\n";
+        machine->setCurrentState(make_unique<SoldOutState>());
+    }
+}
+
+void HasCoinState::returnCoin(VendingMachine* machine) {
+    cout << "[HAS_COIN] Returning " << machine->getTotalMoney() 
+         << " rupees\n";
+    machine->setTotalMoney(0);
+    machine->setCurrentState(make_unique<NoCoinState>());
+}
+
+void DispenseState::dispense(VendingMachine* machine, const string& item) {
+    cout << "[DISPENSE] Dispensing " << item << "...\n";
+    machine->decreaseItemCount(item);
+    machine->setTotalMoney(0);
+    cout << "[DISPENSE] Item dispensed! Thank you!\n";
+    machine->setCurrentState(make_unique<NoCoinState>());
+}
+
+void SoldOutState::returnCoin(VendingMachine* machine) {
+    cout << "[SOLD_OUT] Returning " << machine->getTotalMoney() 
+         << " rupees\n";
+    machine->setTotalMoney(0);
+    machine->setCurrentState(make_unique<NoCoinState>());
+}
+
+// ─────────────────────────────────────────────
+// 5. Client Code
+// ─────────────────────────────────────────────
+int main() {
+    cout << "============ VENDING MACHINE STATE PATTERN ============\n\n";
+
+    VendingMachine machine;
+
+    // Transaction 1: Successful purchase
+    cout << "--- Transaction 1: Successful Purchase ---\n";
+    machine.displayState();
+    machine.insertCoin(5);
+    machine.insertCoin(5);
+    machine.displayState();
+    machine.selectItem("COKE");
+    cout << "\n";
+
+    // Transaction 2: Return coin
+    cout << "--- Transaction 2: Return Coin ---\n";
+    machine.displayState();
+    machine.insertCoin(10);
+    machine.displayState();
+    machine.returnCoin();
+    cout << "\n";
+
+    // Transaction 3: Select sold out item
+    cout << "--- Transaction 3: Sold Out Item ---\n";
+    machine.insertCoin(10);
+    machine.selectItem("PEPSI");
+    machine.returnCoin();
+
+    return 0;
+}
+
+
+OUTPUT EXAMPLE
+================================================================================
+
+============ VENDING MACHINE STATE PATTERN ============
+
+--- Transaction 1: Successful Purchase ---
+[MONEY: 0]
+[NO_COIN] Coin inserted: 5 rupees
+[HAS_COIN] More coin inserted: 5 rupees
+[MONEY: 10]
+[HAS_COIN] Item selected: COKE
+[DISPENSE] Dispensing COKE...
+[DISPENSE] Item dispensed! Thank you!
+
+
+--- Transaction 2: Return Coin ---
+[MONEY: 0]
+[NO_COIN] Coin inserted: 10 rupees
+[MONEY: 10]
+[HAS_COIN] Returning 10 rupees
+[MONEY: 0]
+
+
+--- Transaction 3: Sold Out Item ---
+[HAS_COIN] Item selected: PEPSI
+[HAS_COIN] Item PEPSI is sold out!
+[SOLD_OUT] Returning 10 rupees
+[MONEY: 0]
+
+
+KEY TAKEAWAYS
+================================================================================
+
+1. State Pattern encapsulates state-specific behavior
+2. Each state is a separate class following SRP
+3. Context delegates to current state (Polymorphism)
+4. Adding new states doesn't modify existing code (OCP)
+5. State transitions are explicit and controlled
+6. Reduces complex conditionals dramatically
+7. Makes code more maintainable and testable
+8. Choose this pattern when state changes at runtime!
+
+================================================================================
