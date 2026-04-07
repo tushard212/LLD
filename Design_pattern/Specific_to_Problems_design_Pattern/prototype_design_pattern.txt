@@ -1,0 +1,759 @@
+================================================================================
+                      PROTOTYPE DESIGN PATTERN
+================================================================================
+
+WHY IT WAS NEEDED
+================================================================================
+Problem: Creating new objects is expensive or complex:
+- Object initialization requires heavy computations
+- Database lookups to populate attributes
+- Multiple configuration steps
+- Complex object graphs with many interdependencies
+- Dynamic configuration based on runtime conditions
+
+Example WITHOUT Prototype Pattern:
+- Creating a document from scratch every time
+- Each document needs: header, footer, styles, formatting, margins, fonts, colors
+- Copying similar documents means repeating all setup
+- If you need 100 variations of a template, you recreate everything 100 times
+- High memory usage, slow initialization
+
+Solution: Prototype Pattern allows creating new objects by CLONING existing ones
+instead of creating from scratch. Clone the object and modify only what's needed.
+
+Result: Faster object creation (esp. for complex objects)
+        Reduced initialization overhead
+        Easier to create object variants
+
+
+WHAT PROBLEM IT SOLVES
+================================================================================
+- Avoids expensive object creation/initialization
+- Simplifies creating copies of complex objects
+- Allows dynamic object type instantiation (runtime)
+- Reduces tight coupling to concrete classes
+- Enables object customization through cloning
+- Provides alternative to subclassing for variation
+
+
+HOW IT SOLVES THE PROBLEM (CONCEPT)
+================================================================================
+1. Define Prototype interface with clone() method
+2. Concrete prototypes implement clone() method (copy themselves)
+3. Store prototype instances in a prototype registry
+4. When new object needed: lookup prototype → clone it → customize
+5. Original object is unchanged (most use deep copy)
+
+Instead of: Document doc = new Document(); doc.setup();
+Use: Document doc = prototype.clone(); doc.customize();
+
+
+DOCUMENT CLONING EXAMPLE - SCENARIO
+================================================================================
+
+Real-world Use Case: Document Management System
+=====================================================
+
+User wants to create multiple documents:
+1. Business Report Template
+2. Memo Template
+3. Cover Letter Template
+4. Invoice Template
+
+WITHOUT Prototype:
+- Create Report from scratch → setup styling, headers, fonts, colors
+- Create Memo from scratch → repeat setup
+- Create CoverLetter from scratch → repeat setup
+- Each takes time and memory
+
+WITH Prototype:
+- Store Report template in registry
+- Store Memo template in registry
+- Store CoverLetter template in registry
+- Need new Report? Clone report prototype and customize
+
+
+DOCUMENT TYPES & PROPERTIES
+================================================================================
+
+Report Document:
+  - Title: "Quarterly Report"
+  - Header: "CONFIDENTIAL"
+  - Font: Arial, 12pt
+  - Colors: Blue theme
+  - Footer: "Page X of Y"
+  - Sections: [Executive Summary, Data, Conclusion]
+
+Memo Document:
+  - Title: "Memo"
+  - Header: "TO: FROM: DATE:"
+  - Font: Times New Roman, 11pt
+  - Colors: Professional Gray
+  - Footer: "Internal Use Only"
+  - Sections: [Subject, Details, Action]
+
+Cover Letter Document:
+  - Title: "Cover Letter"
+  - Header: "(Applicant Name and Date)"
+  - Font: Courier, 10pt
+  - Colors: Black theme
+  - Footer: "Sincerely"
+  - Sections: [Opening, Body, Closing]
+
+
+ARCHITECTURE - CLASS DIAGRAM
+================================================================================
+
+        ┌──────────────────────┐
+        │  <<Interface>>       │
+        │     Prototype        │
+        ├──────────────────────┤
+        │ + clone(): Prototype │
+        │ + display()          │
+        └────────────┬─────────┘
+                     △
+         ┌───────────┼───────────┬──────────┐
+         │           │           │          │
+    ┌──────────────┐ ┌────────┐ ┌──────────┐ ┌──────────┐
+    │ReportDoc     │ │MemoDoc │ │CoverLet..│ │InvoiceDoc│
+    ├──────────────┤ ├────────┤ ├──────────┤ ├──────────┤
+    │- title       │ │-title  │ │- title   │ │- title   │
+    │- header      │ │-header │ │- header  │ │- header  │
+    │- font        │ │- font  │ │- font    │ │- font    │
+    │- colors      │ │-colors │ │- colors  │ │- colors  │
+    ├──────────────┤ ├────────┤ ├──────────┤ ├──────────┤
+    │+ clone()     │ │+clone()│ │+ clone() │ │+ clone() │
+    │+ display()   │ │display │ │+ display │ │+ display │
+    └──────────────┘ └────────┘ └──────────┘ └──────────┘
+    (Concrete Prototypes)
+
+
+        ┌─────────────────────────────────┐
+        │  PrototypeRegistry              │
+        │  (Prototype Factory)            │
+        ├─────────────────────────────────┤
+        │ - prototypes: map<string, Proto>│
+        ├─────────────────────────────────┤
+        │ + registerPrototype(name, proto)│
+        │ + getPrototype(name): Prototype │
+        │ + cloneFromRegistry(name)       │
+        │ + listAvailable()               │
+        └─────────────────────────────────┘
+                     △
+                     │ uses
+                     │
+            ┌────────┴────────┐
+            │                 │
+        Prototype1         Prototype2
+        (Report Tmpl)      (Memo Tmpl)
+
+
+CONTROL FLOW - DOCUMENT CLONING
+================================================================================
+
+                    ┌─────────────────┐
+                    │     START       │
+                    └────────┬────────┘
+                             │
+                             ▼
+            ┌────────────────────────────────┐
+            │ Initialize Prototype Registry  │
+            │ (Create template instances)    │
+            └────────────┬───────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+        ▼                ▼                ▼
+    ┌────────────┐  ┌────────────┐  ┌───────────┐
+    │ Report     │  │ Memo       │  │CoverLetter│
+    │ Template   │  │ Template   │  │ Template  │
+    │[setup once]│  │[setup once]│  │[setup once]
+    └──────┬─────┘  └──────┬─────┘  └─────┬─────┘
+           │                │              │
+           │ register       │ register     │ register
+           │                │              │
+           └────────────────┼──────────────┘
+                            ▼
+        ┌─────────────────────────────────┐
+        │  Registry.storePrototypes()     │
+        │                                 │
+        │  "Report" → Report Template     │
+        │  "Memo" → Memo Template         │
+        │  "Letter" → CoverLetter Template│
+        └────────────┬────────────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────────────┐
+        │ User Request: Create New Report │
+        └────────────┬────────────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────────────┐
+        │ Registry.getPrototype("Report") │
+        │ Returns: Report Template Clone  │
+        └────────────┬────────────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────────────┐
+        │ reportTemplate.clone()          │
+        │ Creates: Deep Copy of Template  │
+        │                                 │
+        │ New object with all properties: │
+        │ - title: "Quarterly Report"     │
+        │ - header: "CONFIDENTIAL"        │
+        │ - font: Arial, 12pt             │
+        │ - colors: Blue theme            │
+        │ - sections: [...]               │
+        └────────────┬────────────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────────────┐
+        │ Customize Cloned Object         │
+        │                                 │
+        │ newReport.setTitle(             │
+        │   "Q4 2024 Financial Report"    │
+        │ )                               │
+        │ newReport.setContent(data)      │
+        │ newReport.addCharts(...)        │
+        └────────────┬────────────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────────────┐
+        │ Use Document                    │
+        │                                 │
+        │ newReport.save()                │
+        │ newReport.display()             │
+        │ newReport.print()               │
+        └────────────┬────────────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────────────┐
+        │ REPEAT FOR NEXT REPORT          │
+        │ (Much faster - already has      │
+        │  all base properties)           │
+        └────────────┬────────────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────────────┐
+        │  EXIT / END                     │
+        └─────────────────────────────────┘
+
+
+TIME COMPARISON
+================================================================================
+
+WITHOUT Prototype (Create from scratch each time):
+─────────────────────────────────────────────────
+1. Create Report #1:
+   - New object → 5ms
+   - Setup styling → 20ms
+   - Configure header/footer → 15ms
+   - Add sections → 10ms
+   - Total: 50ms
+
+2. Create Report #2:
+   - New object → 5ms
+   - Setup styling → 20ms
+   - Configure header/footer → 15ms
+   - Add sections → 10ms
+   - Total: 50ms
+
+3. Create Report #3: 50ms
+...
+100 Reports × 50ms = 5,000ms (5 seconds!)
+
+
+WITH Prototype (Clone from template):
+──────────────────────────────────────
+1. Setup Template ONCE:
+   - Create template → 50ms
+   - Register in registry → 2ms
+   - Total: 52ms
+
+2. Create Report #1:
+   - Clone template → 3ms
+   - Customize → 2ms
+   - Total: 5ms
+
+3. Create Report #2:
+   - Clone template → 3ms
+   - Customize → 2ms
+   - Total: 5ms
+
+...
+1 Template setup (52ms) + 100 Reports × 5ms = 552ms
+Savings: 5,000ms - 552ms = 4,448ms (89% faster!)
+
+
+ADVANTAGES
+================================================================================
+
+1. FASTER OBJECT CREATION
+   - Cloning is faster than full initialization
+   - Avoids repeated expensive setup
+   - Deep copy operations typically faster than creation + initialization
+   - Significant performance gain with complex objects
+
+2. AVOIDS EXPENSIVE INITIALIZATION
+   - Skip complex object construction logic
+   - Avoid database lookups (if prototype is pre-loaded)
+   - Skip time-consuming calculations
+   - Don't repeat configuration steps
+
+3. REDUCES COUPLING TO CONCRETE CLASSES
+   - Client doesn't need to know all constructor parameters
+   - Doesn't need to know complex initialization logic
+   - Works with prototype interface, not concrete types
+   - Easier to swap prototypes at runtime
+
+4. HIDES OBJECT CREATION COMPLEXITY
+   - Creation logic encapsulated in Prototype
+   - Client just calls clone()
+   - Simpler API compared to multiple constructors
+   - Follows Principle of Least Knowledge
+
+5. ENABLES DYNAMIC OBJECT CREATION
+   - Create objects based on runtime conditions
+   - Registry stores prototypes, not classes
+   - Easy to add new types without modifying client
+   - Configuration-driven object creation
+
+6. SUPPORTS EASY OBJECT CUSTOMIZATION
+   - Start with pre-configured template
+   - Modify only what's needed
+   - Faster than configuring from scratch
+   - Ensures consistency across similar objects
+
+7. REGISTRY PATTERN INTEGRATION
+   - Central place to manage prototypes
+   - Easy to list available prototypes
+   - Easy to update shared prototypes
+   - Enables prototype discovery
+
+8. MEMORY EFFICIENT FOR LARGE OBJECTS
+   - Share common parts (if using shallow copy with care)
+   - Avoid duplicating expensive-to-create resources
+   - Can implement copy-on-write for optimization
+
+
+DISADVANTAGES
+================================================================================
+
+1. DEEP COPY COMPLEXITY
+   - Implementing deep copy can be tricky
+   - Need to handle circular references
+   - Nested objects must also be cloneable
+   - Can be error-prone for complex objects
+   - Risk of inadvertently sharing references
+
+2. PERFORMANCE OVERHEAD FOR SIMPLE OBJECTS
+   - Cloning might not be faster than creating simple objects
+   - Extra registry lookup adds overhead
+   - Not beneficial for lightweight objects
+   - Might actually be slower than direct construction
+
+3. DIFFICULT IN SOME LANGUAGES
+   - Some languages don't have good clone() support
+   - Need to implement cloning manually
+   - No built-in deep copy mechanism
+   - Can become verbose
+
+4. PROTOTYPE MANAGEMENT OVERHEAD
+   - Must maintain and initialize prototypes
+   - Registry must be kept in sync
+   - Prototypes themselves consume memory
+   - Need to decide when to update shared prototypes
+
+5. HIDDEN STATE SHARING RISKS
+   - Improper shallow copy can share references
+   - Modifying cloned object affects original (if shallow copy)
+   - Hard to debug state corruption
+   - Can lead to unexpected behavior
+
+6. NOT SUITABLE FOR ALL OBJECT TYPES
+   - Some objects cannot be meaningfully cloned
+   - Objects with external state (file handles, connections)
+   - Singleton objects shouldn't be cloned
+   - Objects with unique identity
+
+7. POTENTIAL MEMORY OVERHEAD
+   - Storing prototypes in registry uses memory
+   - Multiple prototypes vs single class
+   - Clones take memory even if mostly unused
+   - Can waste memory for specialized variants
+
+8. LESS INTUITIVE THAN DIRECT CONSTRUCTION
+   - Developers might not know prototypes exist
+   - Registry lookup less obvious than "new Document()"
+   - Requires understanding prototype pattern
+   - Can reduce code readability
+
+
+WHEN TO USE
+================================================================================
+
+✓ Use when: Object creation is expensive (lots of initialization)
+✓ Use when: Creating many similar objects
+✓ Use when: Objects have complex initialization logic
+✓ Use when: Need to avoid subclassing for object variations
+✓ Use when: Object types must be determined at runtime
+✓ Use when: A registry of object templates is beneficial
+✓ Use when: Performance is critical for object creation
+
+✗ Don't use when: Objects are simple and cheap to create
+✗ Don't use when: Only need one instance (use Singleton)
+✗ Don't use when: Object identity matters (should not clone)
+✗ Don't use when: Objects have external resources (file handles)
+✗ Don't use when: Deep copy is impossible or expensive
+
+
+REAL-WORLD EXAMPLES
+================================================================================
+
+1. DOCUMENT TEMPLATES (Our example)
+   - Report, Memo, Invoice templates
+   - Clone and customize for each document
+
+2. GAME OBJECTS
+   - Enemy prototypes: Orc, Goblin, Skeleton
+   - Clone when spawning new enemies
+   - Avoid recreating AI, graphics, behavior
+
+3. DATABASE RECORDS
+   - Template record with common fields
+   - Clone for each new entry
+   - Avoid re-querying default values
+
+4. UI ELEMENTS
+   - Button templates with default styling
+   - Clone for each new button
+   - Avoid redundant styling setup
+
+5. GRAPHIC DESIGN
+   - Shape templates in design software
+   - Clone and modify position/size
+   - Preserve formatting/styles
+
+6. CONFIGURATION OBJECTS
+   - Default configuration template
+   - Clone for each session/context
+   - Modify only specific settings
+
+7. MUSIC/AUDIO SAMPLES
+   - Audio clip templates
+   - Clone for playback instances
+   - Avoid re-loading from disk
+
+
+C++ EXAMPLE - DOCUMENT CLONING
+================================================================================
+
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+#include <map>
+using namespace std;
+
+// ─────────────────────────────────────────────
+// 1. Abstract Prototype
+// ─────────────────────────────────────────────
+class Document {
+protected:
+    string title;
+    string header;
+    string font;
+    string colorTheme;
+    vector<string> sections;
+
+public:
+    Document(const string& t = "", const string& h = "",
+             const string& f = "", const string& c = "")
+        : title(t), header(h), font(f), colorTheme(c) {}
+
+    virtual ~Document() = default;
+
+    virtual shared_ptr<Document> clone() const = 0;
+
+    virtual void display() const {
+        cout << "=== " << title << " ===\n";
+        cout << "Header: " << header << "\n";
+        cout << "Font: " << font << "\n";
+        cout << "Theme: " << colorTheme << "\n";
+        cout << "Sections: ";
+        for (const auto& s : sections) cout << s << " ";
+        cout << "\n\n";
+    }
+
+    void setTitle(const string& t) { title = t; }
+    void addSection(const string& s) { sections.push_back(s); }
+    string getTitle() const { return title; }
+};
+
+// ─────────────────────────────────────────────
+// 2. Concrete Prototypes
+// ─────────────────────────────────────────────
+
+class ReportDocument : public Document {
+public:
+    ReportDocument()
+        : Document("Report", "CONFIDENTIAL",
+                   "Arial, 12pt", "Blue Theme") {
+        sections = {"Executive Summary", "Data Analysis", "Conclusion"};
+    }
+
+    shared_ptr<Document> clone() const override {
+        cout << "[CLONING] Cloning Report Template...\n";
+        return make_shared<ReportDocument>(*this);
+    }
+};
+
+class MemoDocument : public Document {
+public:
+    MemoDocument()
+        : Document("Memo", "TO: / FROM: / DATE:",
+                   "Times New Roman, 11pt", "Gray Theme") {
+        sections = {"Subject", "Details", "Action Items"};
+    }
+
+    shared_ptr<Document> clone() const override {
+        cout << "[CLONING] Cloning Memo Template...\n";
+        return make_shared<MemoDocument>(*this);
+    }
+};
+
+class CoverLetterDocument : public Document {
+public:
+    CoverLetterDocument()
+        : Document("Cover Letter", "[Name and Date]",
+                   "Courier, 10pt", "Black Theme") {
+        sections = {"Opening", "Body Paragraph 1", "Body Paragraph 2", "Closing"};
+    }
+
+    shared_ptr<Document> clone() const override {
+        cout << "[CLONING] Cloning Cover Letter Template...\n";
+        return make_shared<CoverLetterDocument>(*this);
+    }
+};
+
+class InvoiceDocument : public Document {
+public:
+    InvoiceDocument()
+        : Document("Invoice", "INVOICE #001",
+                   "Calibri, 10pt", "Professional Theme") {
+        sections = {"Items", "Summary", "Payment Terms", "Notes"};
+    }
+
+    shared_ptr<Document> clone() const override {
+        cout << "[CLONING] Cloning Invoice Template...\n";
+        return make_shared<InvoiceDocument>(*this);
+    }
+};
+
+// ─────────────────────────────────────────────
+// 3. Prototype Registry
+// ─────────────────────────────────────────────
+class DocumentPrototypeRegistry {
+private:
+    map<string, shared_ptr<Document>> prototypes;
+
+public:
+    void registerPrototype(const string& name,
+                          shared_ptr<Document> prototype) {
+        prototypes[name] = prototype;
+        cout << "[REGISTRY] Registered prototype: " << name << "\n";
+    }
+
+    shared_ptr<Document> clonePrototype(const string& name) {
+        auto it = prototypes.find(name);
+        if (it == prototypes.end()) {
+            cout << "[ERROR] Prototype '" << name << "' not found!\n";
+            return nullptr;
+        }
+        return it->second->clone();
+    }
+
+    void listPrototypes() const {
+        cout << "\n[REGISTRY] Available Prototypes:\n";
+        for (const auto& pair : prototypes) {
+            cout << "  - " << pair.first << "\n";
+        }
+        cout << "\n";
+    }
+};
+
+// ─────────────────────────────────────────────
+// 4. Client Code
+// ─────────────────────────────────────────────
+int main() {
+    cout << "============== PROTOTYPE PATTERN ==============\n";
+    cout << "      Document Cloning Example\n\n";
+
+    // Initialize Registry
+    DocumentPrototypeRegistry registry;
+
+    // Register prototypes (templates)
+    cout << "--- Registering Document Templates ---\n";
+    registry.registerPrototype("Report", make_shared<ReportDocument>());
+    registry.registerPrototype("Memo", make_shared<MemoDocument>());
+    registry.registerPrototype("Letter", make_shared<CoverLetterDocument>());
+    registry.registerPrototype("Invoice", make_shared<InvoiceDocument>());
+
+    registry.listPrototypes();
+
+    // Create new documents by cloning
+    cout << "--- Creating New Documents (By Cloning) ---\n\n";
+
+    // Clone Report
+    auto report1 = registry.clonePrototype("Report");
+    report1->setTitle("Q4 2024 Financial Report");
+    report1->display();
+
+    // Clone another Report
+    auto report2 = registry.clonePrototype("Report");
+    report2->setTitle("Q3 2024 Financial Report");
+    report2->display();
+
+    // Clone Memo
+    auto memo = registry.clonePrototype("Memo");
+    memo->setTitle("Meeting Minutes - 2024");
+    memo->addSection("Follow-ups");
+    memo->display();
+
+    // Clone Cover Letter
+    auto letter = registry.clonePrototype("Letter");
+    letter->setTitle("Application Cover Letter");
+    letter->display();
+
+    // Clone Invoice
+    auto invoice = registry.clonePrototype("Invoice");
+    invoice->setTitle("Invoice #2024-001");
+    invoice->addSection("Tax Calculation");
+    invoice->display();
+
+    cout << "--- Summary ---\n";
+    cout << "Created 5 documents from 4 templates using cloning\n";
+    cout << "Each document inherited properties from its template\n";
+    cout << "Customization applied to individual clones\n";
+
+    return 0;
+}
+
+
+OUTPUT EXAMPLE
+================================================================================
+
+============== PROTOTYPE PATTERN ==============
+      Document Cloning Example
+
+--- Registering Document Templates ---
+[REGISTRY] Registered prototype: Report
+[REGISTRY] Registered prototype: Memo
+[REGISTRY] Registered prototype: Letter
+[REGISTRY] Registered prototype: Invoice
+
+[REGISTRY] Available Prototypes:
+  - Invoice
+  - Letter
+  - Memo
+  - Report
+
+--- Creating New Documents (By Cloning) ---
+
+[CLONING] Cloning Report Template...
+=== Q4 2024 Financial Report ===
+Header: CONFIDENTIAL
+Font: Arial, 12pt
+Theme: Blue Theme
+Sections: Executive Summary Data Analysis Conclusion
+
+[CLONING] Cloning Report Template...
+=== Q3 2024 Financial Report ===
+Header: CONFIDENTIAL
+Font: Arial, 12pt
+Theme: Blue Theme
+Sections: Executive Summary Data Analysis Conclusion
+
+[CLONING] Cloning Memo Template...
+=== Meeting Minutes - 2024 ===
+Header: TO: / FROM: / DATE:
+Font: Times New Roman, 11pt
+Theme: Gray Theme
+Sections: Subject Details Action Items Follow-ups
+
+[CLONING] Cloning Cover Letter Template...
+=== Application Cover Letter ===
+Header: [Name and Date]
+Font: Courier, 10pt
+Theme: Black Theme
+Sections: Opening Body Paragraph 1 Body Paragraph 2 Closing
+
+[CLONING] Cloning Invoice Template...
+=== Invoice #2024-001 ===
+Header: INVOICE #001
+Font: Calibri, 10pt
+Theme: Professional Theme
+Sections: Items Summary Payment Terms Notes Tax Calculation
+
+--- Summary ---
+Created 5 documents from 4 templates using cloning
+Each document inherited properties from its template
+Customization applied to individual clones
+
+
+CLONE MECHANICS - SHALLOW vs DEEP COPY
+================================================================================
+
+SHALLOW COPY (Dangerous):
+========================
+Original:  title ─→ "Report"
+           sections ─→ ["Summary", "Data"]
+
+Shallow Clone: title ─→ "Report"
+               sections ─→ (same pointer as original!)
+
+Problem: Modifying clone's sections affects original!
+clone.addSection("New") → Original also has "New"
+
+Code Example (WRONG):
+```cpp
+auto doc2 = doc1;  // Shallow copy - DANGEROUS!
+doc2.addSection("section2");  // Original also changed!
+```
+
+
+DEEP COPY (Correct):
+====================
+Original:  title ─→ "Report"
+           sections ─→ ["Summary", "Data"]
+
+Deep Clone: title ─→ "Report" (new string)
+            sections ─→ (new vector with copies of strings)
+
+OK: Modifying clone doesn't affect original!
+clone.addSection("New") → Only clone has "New"
+
+Code Example (CORRECT):
+```cpp
+auto doc2 = doc1->clone();  // Deep copy implementation
+doc2->addSection("section2");  // Original unaffected!
+```
+
+
+KEY TAKEAWAYS
+================================================================================
+
+1. Prototype Pattern avoids expensive object creation
+2. Clone existing objects instead of building from scratch
+3. Registry stores and manages prototype templates
+4. Clients request clones, not instances
+5. Deep copy ensures modifications don't affect original
+6. Useful for complex, expensive-to-create objects
+7. Provides runtime object type determination
+8. Reduces coupling to concrete classes
+9. Must implement clone() method properly
+10. Choose between shallow and deep copy carefully
+11. Not all objects can/should be cloned
+12. Good performance gains for frequently created complex objects
+
+================================================================================
