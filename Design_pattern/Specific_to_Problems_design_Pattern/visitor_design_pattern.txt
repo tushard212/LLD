@@ -1,0 +1,953 @@
+================================================================================
+                        VISITOR DESIGN PATTERN
+================================================================================
+
+WHY IT WAS NEEDED
+================================================================================
+Problem: When you have a complex object structure (many element types) and need
+to perform many different operations on them:
+
+Example WITHOUT Visitor Pattern:
+- Document with: Paragraph, Image, Table, TextBox, ChartBox elements
+- Operations needed: Export to PDF, Export to HTML, Export to Word, Print, etc.
+- Each element must have: exportPdf(), exportHtml(), exportWord(), print()
+- 5 elements × 5 operations = 25 methods!
+- Adding new operation = Modify ALL element classes
+- Violates Open-Closed Principle (open for extension, not modification)
+- Document classes become bloated with unrelated logic
+- Tight coupling between elements and operations
+
+Solution: Visitor Pattern separates operations from object structure
+- Each operation in its own Visitor class
+- Add new operations without modifying element classes
+- Element classes stay focused (Single Responsibility)
+- New export format? Just create new Visitor class
+- No need to modify Document, Paragraph, Image, Table classes
+
+
+WHAT PROBLEM IT SOLVES
+================================================================================
+- Avoids tight coupling between operations and object structures
+- Eliminates multiple conditional checks (if Paragraph, if Image, etc.)
+- Simplifies adding new operations without modifying existing elements
+- Keeps element classes focused on their core responsibility
+- Follows Single Responsibility Principle
+- Follows Open-Closed Principle (open for new operations)
+- Makes operations testable in isolation
+
+
+HOW IT SOLVES THE PROBLEM (CONCEPT)
+================================================================================
+1. Define Visitor interface with visit() method for each element type
+2. Define Element interface with accept(Visitor) method
+3. Concrete elements implement accept() - pass themselves to visitor
+4. Concrete visitors implement visit() methods - perform operation on element
+5. Client iterates through elements, calls accept(visitor) on each
+
+Instead of: element.exportPdf(), element.exportHtml(), element.exportWord()
+Use: element.accept(pdfVisitor), element.accept(htmlVisitor), element.accept(wordVisitor)
+     → Element delegates to visitor
+     → Visitor performs the operation
+
+
+DOCUMENT ELEMENTS EXAMPLE - ARCHITECTURE
+================================================================================
+
+        ┌──────────────────────┐
+        │  <<Interface>>       │
+        │    Visitor           │
+        ├──────────────────────┤
+        │ + visit(Paragraph)   │
+        │ + visit(Image)       │
+        │ + visit(Table)       │
+        │ + visit(TextBox)     │
+        │ + visit(Chart)       │
+        └────────────┬─────────┘
+                     △
+         ┌───────────┼───────────┬──────────┐
+         │           │           │          │
+    ┌──────────┐ ┌────────────┐ ┌──────────┐ ┌──────────┐
+    │PdfVisitor│ │HtmlVisitor │ │WordVisitor│ │PrintV..  │
+    ├──────────┤ ├────────────┤ ├──────────┤ ├──────────┤
+    │+ visit()s│ │+ visit()s  │ │+ visit()s│ │+ visit()s│
+    │renders   │ │renders     │ │renders   │ │renders   │
+    │for PDF   │ │for HTML    │ │for Word  │ │to output │
+    └──────────┘ └────────────┘ └──────────┘ └──────────┘
+    (Concrete Visitors - each implements operation)
+
+
+        ┌──────────────────────┐
+        │  <<Interface>>       │
+        │    Element           │
+        ├──────────────────────┤
+        │ + accept(Visitor)    │
+        │ + display()          │
+        └────────────┬─────────┘
+                     △
+         ┌───────────┼───────────┬──────┐
+         │           │           │      │
+    ┌────────────┐ ┌──────────┐ ┌─────┐ ┌──────────┐
+    │Paragraph   │ │Image     │ │Table│ │TextBox   │
+    ├────────────┤ ├──────────┤ ├─────┤ ├──────────┤
+    │- text      │ │- url     │ │-rows│ │- text    │
+    ├────────────┤ ├──────────┤ ├─────┤ ├──────────┤
+    │+ accept()  │ │+ accept()│ │+acpt│ │+ accept()│
+    │ return     │ │ return   │ │ ret │ │ return   │
+    │ visitor.   │ │ visitor. │ │ vis │ │ visitor. │
+    │ visit(this)│ │ visit(th)│ │it() │ │ visit(th)│
+    └────────────┘ └──────────┘ └─────┘ └──────────┘
+    (Concrete Elements)
+         │              │            │         │
+         │              │            │         │
+         └──────────────┴────────────┴─────────┘
+                      │
+              ┌───────┴────────┐
+              │                │
+              ▼                ▼
+         Visitor.visit(this)  Visitor.visit(this)
+         (double dispatch)    (polymorphism)
+
+        ┌──────────────────────┐
+        │    Document          │
+        │  (Composite)         │
+        ├──────────────────────┤
+        │ - elements[]         │
+        ├──────────────────────┤
+        │ + exportPdf(visitor) │
+        │ + exportHtml(visitor)│
+        │ + print(visitor)     │
+        │                      │
+        │ FOR each element:    │
+        │   element.accept(v)  │
+        └──────────────────────┘
+
+
+DOUBLE DISPATCH - HOW IT WORKS
+================================================================================
+
+The key to Visitor Pattern is "Double Dispatch" - choosing method based on:
+1. Type of element (Paragraph, Image, Table, etc.)
+2. Type of visitor (PdfVisitor, HtmlVisitor, etc.)
+
+Example:
+Element e = new Paragraph("Hello");
+Visitor v = new PdfVisitor();
+
+e.accept(v);
+
+Flow:
+1. e.accept(v) is called
+   → Runtime type of e is Paragraph
+   → Calls Paragraph.accept(v)
+
+2. Inside Paragraph.accept(v):
+   → v.visit(this)
+   → Runtime type of v is PdfVisitor
+   → Calls PdfVisitor.visit(Paragraph p)
+
+3. PdfVisitor.visit(Paragraph p):
+   → Knows it's a Paragraph
+   → Knows it needs PDF rendering
+   → Can access Paragraph-specific properties (text)
+   → Performs PDF export logic
+
+Result: Correct method called based on BOTH element type AND visitor type!
+
+
+DOCUMENT EXPORT EXAMPLE - ELEMENT TYPES
+================================================================================
+
+Paragraph Element:
+  - Content: "This is a paragraph of text"
+  - Font: Arial, 12pt
+  - Color: Black
+
+Image Element:
+  - URL: "https://example.com/image.jpg"
+  - Alt Title: "My Image"
+  - Width: 800px, Height: 600px
+
+Table Element:
+  - Rows: 3, Columns: 4
+  - Headers: ["Name", "Age", "Email", "Phone"]
+  - Data: [[...], [...], [...]]
+
+TextBox Element:
+  - Text: "Important Note"
+  - Border: 2px solid blue
+  - Background: Yellow
+
+Chart Element:
+  - Type: Bar Chart
+  - Title: "Sales by Quarter"
+  - Data: {Q1: 100, Q2: 150, Q3: 120, Q4: 200}
+
+
+CONTROL FLOW - DOCUMENT EXPORT WITH VISITOR
+================================================================================
+
+                    ┌──────────────────┐
+                    │      START       │
+                    └────────┬─────────┘
+                             │
+                             ▼
+            ┌────────────────────────────────┐
+            │ Create Document                │
+            │ Add elements to document       │
+            │ - Paragraph                    │
+            │ - Image                        │
+            │ - Table                        │
+            │ - TextBox                      │
+            └────────────┬───────────────────┘
+                         │
+                         ▼
+            ┌────────────────────────────────┐
+            │ User wants to export to PDF    │
+            └────────────┬───────────────────┘
+                         │
+                         ▼
+            ┌────────────────────────────────┐
+            │ Create PdfVisitor              │
+            └────────────┬───────────────────┘
+                         │
+                         ▼
+            ┌────────────────────────────────┐
+            │ Call document.exportPdf(visitor)
+            │                                │
+            │ FOR each element in document:  │
+            └────────────┬───────────────────┘
+                         │
+              ┌──────────┼──────────┐
+              │          │          │
+              ▼          ▼          ▼
+        ┌──────────┐ ┌────────┐ ┌──────────┐
+        │Element 1 │ │Element2│ │Element 3 │
+        │Paragraph │ │ Image  │ │ Table    │
+        └─────┬────┘ └───┬────┘ └─────┬────┘
+              │          │            │
+              ▼          ▼            ▼
+      para.accept(v)  img.accept(v)  tbl.accept(v)
+              │          │            │
+              ├──────────┼────────────┤
+              │          │            │
+              ▼          ▼            ▼
+      v.visit(para)  v.visit(img)  v.visit(tbl)
+              │          │            │
+              │(double dispatch)      │
+              │          │            │
+              ▼          ▼            ▼
+      PdfVisitor::    PdfVisitor::   PdfVisitor::
+      visit(Paragraph)visit(Image)   visit(Table)
+              │          │            │
+              ├──────────┼────────────┤
+              │          │            │
+              ▼          ▼            ▼
+      Render text    Embed      Create PDF
+      in PDF format  image in   table format
+                    PDF format
+              │          │            │
+              └──────────┼────────────┘
+                         │
+                         ▼
+            ┌────────────────────────────────┐
+            │ All elements processed         │
+            │ PDF content generated          │
+            └────────────┬───────────────────┘
+                         │
+                         ▼
+            ┌────────────────────────────────┐
+            │ User wants to export to HTML   │
+            └────────────┬───────────────────┘
+                         │
+                         ▼
+            ┌────────────────────────────────┐
+            │ Create HtmlVisitor             │
+            │ Call document.exportHtml(v)    │
+            │ FOR each element: accept(v)    │
+            │   v.visit(element)             │
+            └────────────┬───────────────────┘
+                         │
+        ┌────────────────┼─────────────────┐
+        │                │                 │
+        ▼                ▼                 ▼
+    HtmlVisitor::    HtmlVisitor::    HtmlVisitor::
+    visit(Paragraph)visit(Image)      visit(Table)
+        │                │                 │
+        ├────────────────┼─────────────────┤
+        │                │                 │
+        ▼                ▼                 ▼
+    Render as       Render as      Render as
+    <p> tag         <img> tag      <table> tag
+        │                │                 │
+        └────────────────┼─────────────────┘
+                         │
+                         ▼
+            ┌────────────────────────────────┐
+            │ HTML content generated         │
+            └────────────┬───────────────────┘
+                         │
+                         ▼
+            ┌────────────────────────────────┐
+            │ END - Document exported        │
+            │ in multiple formats without    │
+            │ modifying Document classes     │
+            └────────────────────────────────┘
+
+
+STRATEGY vs VISITOR PATTERN - KEY DIFFERENCES
+================================================================================
+
+┌─────────────────────┬──────────────────────┬──────────────────────────┐
+│ Aspect              │ STRATEGY             │ VISITOR                  │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ PRIMARY PURPOSE     │ Encapsulate a        │ Perform operations       │
+│                     │ family of algorithms │ on object structures     │
+│                     │ for ONE object       │ with MANY object types   │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ WHAT CHANGES        │ HOW an object behaves│ WHAT operations to apply │
+│                     │ (single object)      │ (multiple object types)  │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ OBJECT STRUCTURE    │ Flat/Simple          │ Complex (tree, graph)    │
+│                     │ One object type      │ Many element types       │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ TYPICAL USE         │ ShoppingCart with    │ Document with many types │
+│ CASE                │ different payment    │ of elements that need    │
+│                     │ strategies           │ different operations     │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ NUMBER OF           │ Few (Payment,        │ Many (exportPdf,         │
+│ BEHAVIORS           │ Shipping, etc.)      │ exportHtml, print,       │
+│                     │                      │ validate, etc.)          │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ COUPLING            │ Strategy couples to  │ Visitor couples to       │
+│ DIRECTION           │ Context              │ Element hierarchy        │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ DISPATCH METHOD     │ Single dispatch      │ Double dispatch          │
+│                     │ (one type)           │ (object + operation)     │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ OPERATION LOCATION  │ In Strategy object   │ In Visitor object        │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ ADDING NEW BEHAVIOR │ Create new Strategy  │ Create new Visitor       │
+│                     │ class                │ class (with all visit() m)
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ MODIFICATION NEEDS  │ NO - modify Strategy │ NO - modify Elements     │
+│ TO EXISTING CODE    │                      │                          │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ EXAMPLE             │ PaymentStrategy:     │ Element: Paragraph, Image│
+│ INTERFACE           │ - pay(amount)        │ Visitor: visit(Para),    │
+│                     │                      │          visit(Image)    │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ CONTEXT             │ Knows Strategy       │ Knows Element types      │
+│ KNOWLEDGE           │ Doesn't know type    │ Doesn't know operations  │
+└─────────────────────┴──────────────────────┴──────────────────────────┘
+
+
+WHY VISITOR WAS NEEDED EVEN WITH STRATEGY
+================================================================================
+
+Strategy Pattern NOT Sufficient For Visitor Use Case:
+=====================================================
+
+Scenario: Document with Paragraph, Image, Table elements
+          Need to export to PDF, HTML, Word
+
+Using ONLY Strategy Pattern:
+────────────────────────────
+
+interface ExportStrategy {}
+
+class PdfExportStrategy {}
+class HtmlExportStrategy {}
+class WordExportStrategy {}
+
+Problem: Each element needs ALL strategies!
+
+Paragraph class would need:
+  - pdfStrategy: PdfExportStrategy
+  - htmlStrategy: HtmlExportStrategy
+  - wordStrategy: WordExportStrategy
+  Paragraph exports PDF, HTML, Word
+
+Image class would need:
+  - pdfStrategy: PdfExportStrategy
+  - htmlStrategy: HtmlExportStrategy
+  - wordStrategy: WordExportStrategy
+  Image exports PDF, HTML, Word
+
+Table class would need:
+  - pdfStrategy: PdfExportStrategy
+  - htmlStrategy: HtmlExportStrategy
+  - wordStrategy: WordExportStrategy
+  Table exports PDF, HTML, Word
+
+Issues:
+1. TIGHT COUPLING: Each element class couples to ALL strategy types
+2. CODE DUPLICATION: Same strategy references in every element
+3. ADDING NEW FORMAT: Modify EVERY element class to add new strategies
+4. MEMORY WASTE: Each element instance carries strategy references
+5. LOGIC SCATTERED: Export logic spread across element classes AND strategies
+6. NOT COHESIVE: Elements responsible for export operations
+
+
+Using VISITOR Pattern (Better):
+───────────────────────────────
+
+interface Element { accept(Visitor v) }
+
+interface Visitor {
+  visit(Paragraph p)
+  visit(Image i)
+  visit(Table t)
+}
+
+class PdfVisitor implements Visitor {
+  visit(Paragraph p) { /* PDF export */ }
+  visit(Image i) { /* PDF export */ }
+  visit(Table t) { /* PDF export */ }
+}
+
+class HtmlVisitor implements Visitor {
+  visit(Paragraph p) { /* HTML export */ }
+  visit(Image i) { /* HTML export */ }
+  visit(Table t) { /* HTML export */ }
+}
+
+class WordVisitor implements Visitor {
+  visit(Paragraph p) { /* Word export */ }
+  visit(Image i) { /* Word export */ }
+  visit(Table t) { /* Word export */ }
+}
+
+Benefits:
+1. CLEAN SEPARATION: Each operation in own Visitor class
+2. FLEXIBLE: Easy to add new operations (new Visitor)
+3. NO MODIFICATION: Add new export format without changing Elements
+4. COHESIVE: Each Visitor focuses on ONE export format
+5. TESTABLE: Each Visitor independently testable
+6. SCALABLE: Works great with many element types and operations
+
+
+KEY INSIGHT:
+============
+Strategy: ONE object needs multiple behaviors
+          → Best for: PaymentStrategy, ShippingStrategy
+
+Visitor:  MANY object types need same behavior applied
+          → Best for: Export to PDF/HTML/Word, Validate, Print
+
+If you have N element types and M operations:
+- Strategy + N strategies: Need N×M references (bloated)
+- Visitor + M visitors: Need M visitors (clean, extensible)
+
+
+ADVANTAGES
+================================================================================
+
+1. SEPARATES CONCERNS PERFECTLY
+   - Operations completely separate from element classes
+   - Element classes don't know about operations
+   - Operations don't hardcode element-specific logic
+   - Each class has single, clear responsibility
+
+2. FOLLOWS OPEN-CLOSED PRINCIPLE
+   - Open for new operations (add new Visitor)
+   - Closed for modification (don't touch Element classes)
+   - Adding export format: create new Visitor, no changes needed
+
+3. EASY TO ADD NEW OPERATIONS
+   - Need new operation? Create new Visitor class
+   - No modifications to existing code
+   - All operations centralized in Visitor package
+   - Easy to organize and maintain
+
+4. ELIMINATES CONDITIONAL LOGIC
+   - No if-else chains checking element types
+   - No switch statements (type instanceof checks)
+   - Polymorphism handles dispatch automatically
+   - Code is cleaner and more maintainable
+
+5. CONSISTENT OPERATION ACROSS TYPES
+   - Same operation applied to all element types
+   - All traversal logic in one place
+   - Ensures uniform behavior across hierarchy
+   - Easier to debug operations
+
+6. DOUBLE DISPATCH FLEXIBILITY
+   - Behavior depends on element type AND visitor type
+   - Powerful combination of polymorphism
+   - Enables sophisticated algorithms
+   - Type-safe without casting
+
+7. VISITOR STATE MANAGEMENT
+   - Visitor can accumulate state during traversal
+   - Example: Count elements, collect statistics
+   - Each visitor instance maintains operation-specific state
+   - Clean way to "gather" information from structure
+
+8. TESTABILITY
+   - Mock visitors for testing element behavior
+   - Mock elements for testing visitor logic
+   - Each can be tested independently
+   - Comprehensive test coverage easier
+
+
+DISADVANTAGES
+================================================================================
+
+1. COMPLEX TO UNDERSTAND
+   - Double dispatch concept not intuitive
+   - Learning curve for developers
+   - Requires understanding of polymorphism
+   - Collaboration between classes not obvious
+   - Hard to understand from code reading alone
+
+2. VISITOR BECOMES LARGE
+   - Visitor interface grows with new element types
+   - Each concrete visitor implements many methods
+   - Single visitor class becomes complex
+   - Hard to test monolithic visitor classes
+
+3. ADDING NEW ELEMENT TYPES IS HARD
+   - Must modify ALL visitor classes
+   - Add new visit(NewElement) method to each
+   - If you frequently add elements: painful
+   - Violates Open-Closed Principle for elements
+
+4. TIGHT COUPLING TO ELEMENT HIERARCHY
+   - Visitor tightly coupled to element structure
+   - Must know all element types
+   - Changes to element hierarchy ripple to all visitors
+   - Major refactoring if element structure changes
+
+5. ENCAPSULATION VIOLATION
+   - Elements must expose internal state to visitors
+   - Visitor needs access to element properties
+   - Could expose implementation details
+   - Breaks encapsulation in some designs
+
+6. OVERKILL FOR SIMPLE HIERARCHIES
+   - For few element types: overcomplicates design
+   - Alternative patterns (inheritance, if-else) simpler
+   - Not worth the complexity for trivial cases
+   - Premature optimization
+
+7. PERFORMANCE OVERHEAD
+   - Method lookup during double dispatch
+   - Virtual function calls add overhead
+   - Not suitable for performance-critical paths
+   - Extra object creation for each visitor
+
+8. LANGUAGE SUPPORT VARIES
+   - Some languages lack good double dispatch support
+   - Must manually implement dispatch in some cases
+   - Makes pattern harder to implement
+   - Less clean without language support
+
+
+WHEN TO USE
+================================================================================
+
+✓ Use when: Complex object structure with many element types
+✓ Use when: Need multiple different operations on elements
+✓ Use when: Operations frequently added (formats, exports)
+✓ Use when: Element structure stable (rarely changes)
+✓ Use when: Want clean separation of concerns
+✓ Use when: Need to avoid conditionals on element types
+✓ Use when: Operations are unrelated to element classes
+
+✗ Don't use when: Few element types (use inheritance)
+✗ Don't use when: Element structure frequently changes
+✗ Don't use when: Only one or two operations needed
+✗ Don't use when: Simplicity is priority (overkill)
+✗ Don't use when: Language lacks polymorphism support
+✗ Don't use when: Performance is critical
+
+
+REAL-WORLD EXAMPLES
+================================================================================
+
+1. DOCUMENT EXPORT (Our example)
+   - Elements: Paragraph, Image, Table, TextBox, Chart
+   - Operations: Export to PDF, HTML, Word, XML, Print
+
+2. COMPILER DESIGN
+   - Elements: BinaryOp, UnaryOp, Literal, Variable
+   - Operations: CodeGeneration, TypeChecking, Optimization
+
+3. FILE SYSTEM OPERATIONS
+   - Elements: File, Directory, Symlink
+   - Operations: Compress, Encrypt, Scan for Viruses
+
+4. GAME RENDERING
+   - Elements: Character, Enemy, Projectile, Terrain
+   - Operations: Render, UpdatePhysics, UpdateAI
+
+5. AST (Abstract Syntax Tree) PROCESSING
+   - Elements: Various AST node types
+   - Operations: Interpret, Compile, Optimize, Visualize
+
+6. REPORT GENERATION
+   - Elements: Text, Image, Chart, Table, Map
+   - Operations: Generate PDF, HTML, Excel, Print
+
+7. GUI EVENT HANDLING
+   - Elements: Button, TextField, CheckBox, Label
+   - Operations: Serialize, Validate, Render
+
+
+C++ EXAMPLE - DOCUMENT ELEMENTS & VISITORS
+================================================================================
+
+#include <iostream>
+#include <vector>
+#include <memory>
+#include <string>
+using namespace std;
+
+// Forward declarations
+class Visitor;
+
+// ─────────────────────────────────────────────
+// 1. Abstract Element
+// ─────────────────────────────────────────────
+class Element {
+public:
+    virtual ~Element() = default;
+    virtual void accept(Visitor* visitor) = 0;
+    virtual void display() const = 0;
+};
+
+// ─────────────────────────────────────────────
+// 2. Concrete Elements
+// ─────────────────────────────────────────────
+
+class Paragraph : public Element {
+private:
+    string content;
+    string fontSize;
+
+public:
+    Paragraph(const string& text, const string& size)
+        : content(text), fontSize(size) {}
+
+    void accept(Visitor* visitor) override;
+    void display() const override {
+        cout << "[Paragraph] " << content << " (" << fontSize << ")\n";
+    }
+
+    string getContent() const { return content; }
+    string getFontSize() const { return fontSize; }
+};
+
+class Image : public Element {
+private:
+    string url;
+    string altText;
+    int width, height;
+
+public:
+    Image(const string& u, const string& alt, int w, int h)
+        : url(u), altText(alt), width(w), height(h) {}
+
+    void accept(Visitor* visitor) override;
+    void display() const override {
+        cout << "[Image] " << altText << " (" << width << "x" << height << ")\n";
+    }
+
+    string getUrl() const { return url; }
+    string getAltText() const { return altText; }
+    int getWidth() const { return width; }
+    int getHeight() const { return height; }
+};
+
+class Table : public Element {
+private:
+    int rows, cols;
+    vector<string> headers;
+
+public:
+    Table(int r, int c, const vector<string>& h)
+        : rows(r), cols(c), headers(h) {}
+
+    void accept(Visitor* visitor) override;
+    void display() const override {
+        cout << "[Table] " << rows << "x" << cols << " table\n";
+    }
+
+    int getRows() const { return rows; }
+    int getCols() const { return cols; }
+    const vector<string>& getHeaders() const { return headers; }
+};
+
+// ─────────────────────────────────────────────
+// 3. Abstract Visitor
+// ─────────────────────────────────────────────
+class Visitor {
+public:
+    virtual ~Visitor() = default;
+    virtual void visit(Paragraph* para) = 0;
+    virtual void visit(Image* img) = 0;
+    virtual void visit(Table* table) = 0;
+};
+
+// ─────────────────────────────────────────────
+// 4. Concrete Visitors
+// ─────────────────────────────────────────────
+
+class PdfExportVisitor : public Visitor {
+public:
+    void visit(Paragraph* para) override {
+        cout << "  [PDF] Rendering paragraph: ";
+        cout << "Text: \"" << para->getContent() << "\" ";
+        cout << "Size: " << para->getFontSize() << "\n";
+    }
+
+    void visit(Image* img) override {
+        cout << "  [PDF] Embedding image: ";
+        cout << img->getAltText() << " from " << img->getUrl();
+        cout << " (" << img->getWidth() << "x" << img->getHeight() << ")\n";
+    }
+
+    void visit(Table* table) override {
+        cout << "  [PDF] Rendering table: ";
+        cout << table->getRows() << "x" << table->getCols() << " with headers: ";
+        for (const auto& h : table->getHeaders()) cout << h << " ";
+        cout << "\n";
+    }
+};
+
+class HtmlExportVisitor : public Visitor {
+public:
+    void visit(Paragraph* para) override {
+        cout << "  [HTML] <p style=\"font-size:" << para->getFontSize() << "\">";
+        cout << para->getContent() << "</p>\n";
+    }
+
+    void visit(Image* img) override {
+        cout << "  [HTML] <img src=\"" << img->getUrl() << "\" ";
+        cout << "alt=\"" << img->getAltText() << "\" ";
+        cout << "width=\"" << img->getWidth() << "\" ";
+        cout << "height=\"" << img->getHeight() << "\"/>\n";
+    }
+
+    void visit(Table* table) override {
+        cout << "  [HTML] <table><thead><tr>";
+        for (const auto& h : table->getHeaders())
+            cout << "<th>" << h << "</th>";
+        cout << "</tr></thead>...\n";
+    }
+};
+
+class WordExportVisitor : public Visitor {
+public:
+    void visit(Paragraph* para) override {
+        cout << "  [WORD] <Paragraph><Text>" << para->getContent();
+        cout << "</Text></Paragraph>\n";
+    }
+
+    void visit(Image* img) override {
+        cout << "  [WORD] <Image><Url>" << img->getUrl();
+        cout << "</Url></Image>\n";
+    }
+
+    void visit(Table* table) override {
+        cout << "  [WORD] <Table rows=\"" << table->getRows();
+        cout << "\" cols=\"" << table->getCols() << "\"/>\n";
+    }
+};
+
+class PrintVisitor : public Visitor {
+public:
+    void visit(Paragraph* para) override {
+        cout << "  [PRINT] >>> " << para->getContent() << "\n";
+    }
+
+    void visit(Image* img) override {
+        cout << "  [PRINT] [IMAGE: " << img->getAltText() << "]\n";
+    }
+
+    void visit(Table* table) override {
+        cout << "  [PRINT] +---TABLE---+\n";
+    }
+};
+
+// ─────────────────────────────────────────────
+// 5. Implement accept() methods
+// ─────────────────────────────────────────────
+
+void Paragraph::accept(Visitor* visitor) {
+    visitor->visit(this);
+}
+
+void Image::accept(Visitor* visitor) {
+    visitor->visit(this);
+}
+
+void Table::accept(Visitor* visitor) {
+    visitor->visit(this);
+}
+
+// ─────────────────────────────────────────────
+// 6. Document (Composite)
+// ─────────────────────────────────────────────
+class Document {
+private:
+    vector<shared_ptr<Element>> elements;
+
+public:
+    void addElement(shared_ptr<Element> elem) {
+        elements.push_back(elem);
+    }
+
+    void exportTo(Visitor* visitor) {
+        for (auto& elem : elements) {
+            elem->accept(visitor);
+        }
+    }
+
+    void display() {
+        cout << "Document contents:\n";
+        for (auto& elem : elements) {
+            elem->display();
+        }
+    }
+};
+
+// ─────────────────────────────────────────────
+// 7. Client Code
+// ─────────────────────────────────────────────
+int main() {
+    cout << "============== VISITOR PATTERN ==============\n";
+    cout << "    Document Elements Export Example\n\n";
+
+    // Create document
+    Document doc;
+    doc.addElement(make_shared<Paragraph>(
+        "Introduction to Design Patterns", "12pt"));
+    doc.addElement(make_shared<Image>(
+        "https://example.com/pattern.jpg", "Pattern Diagram", 400, 300));
+    doc.addElement(make_shared<Table>(
+        3, 4, vector<string>{"Name", "Pattern", "Type", "Year"}));
+
+    // Display document content
+    doc.display();
+    cout << "\n";
+
+    // Export to PDF
+    cout << "--- Exporting to PDF ---\n";
+    PdfExportVisitor pdfVisitor;
+    doc.exportTo(&pdfVisitor);
+    cout << "\n";
+
+    // Export to HTML
+    cout << "--- Exporting to HTML ---\n";
+    HtmlExportVisitor htmlVisitor;
+    doc.exportTo(&htmlVisitor);
+    cout << "\n";
+
+    // Export to Word
+    cout << "--- Exporting to Word ---\n";
+    WordExportVisitor wordVisitor;
+    doc.exportTo(&wordVisitor);
+    cout << "\n";
+
+    // Print document
+    cout << "--- Printing Document ---\n";
+    PrintVisitor printVisitor;
+    doc.exportTo(&printVisitor);
+
+    return 0;
+}
+
+
+OUTPUT EXAMPLE
+================================================================================
+
+============== VISITOR PATTERN ==============
+    Document Elements Export Example
+
+Document contents:
+[Paragraph] Introduction to Design Patterns (12pt)
+[Image] Pattern Diagram (400x300)
+[Table] 3x4 table
+
+--- Exporting to PDF ---
+  [PDF] Rendering paragraph: Text: "Introduction to Design Patterns" Size: 12pt
+  [PDF] Embedding image: Pattern Diagram from https://example.com/pattern.jpg (400x300)
+  [PDF] Rendering table: 3x4 with headers: Name Pattern Type Year
+
+--- Exporting to HTML ---
+  [HTML] <p style="font-size:12pt">Introduction to Design Patterns</p>
+  [HTML] <img src="https://example.com/pattern.jpg" alt="Pattern Diagram" width="400" height="300"/>
+  [HTML] <table><thead><tr><th>Name</th><th>Pattern</th><th>Type</th><th>Year</th></tr></thead>...
+
+--- Exporting to Word ---
+  [WORD] <Paragraph><Text>Introduction to Design Patterns</Text></Paragraph>
+  [WORD] <Image><Url>https://example.com/pattern.jpg</Url></Image>
+  [WORD] <Table rows="3" cols="4"/>
+
+--- Printing Document ---
+  [PRINT] >>> Introduction to Design Patterns
+  [PRINT] [IMAGE: Pattern Diagram]
+  [PRINT] +---TABLE---+
+
+
+STRATEGY vs VISITOR - QUICK REFERENCE
+================================================================================
+
+┌──────────────────────────────────────────────────────────────────┐
+│                      STRATEGY PATTERN                           │
+├──────────────────────────────────────────────────────────────────┤
+│ Use case: One object (ShoppingCart) needs multiple behaviors    │
+│           (PaymentStrategy, ShippingStrategy)                   │
+│                                                                  │
+│ Structure:                                                       │
+│   ShoppingCart has Strategy { pay(), ship(), ...}               │
+│                                                                  │
+│ Adding new behavior:                                            │
+│   Create new Strategy class, inject into context                │
+│                                                                  │
+│ Advantage: Simple, easy to understand                           │
+│ Disadvantage: Not good for many element types                   │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│                       VISITOR PATTERN                           │
+├──────────────────────────────────────────────────────────────────┤
+│ Use case: Many element types (Paragraph, Image, Table)          │
+│           need same operations (exportPdf, exportHtml, print)   │
+│                                                                  │
+│ Structure:                                                       │
+│   Element hierarchy accepts Visitor                             │
+│   Visitor visits all element types                              │
+│                                                                  │
+│ Adding new operation:                                           │
+│   Create new Visitor class with visit() for each element        │
+│                                                                  │
+│ Advantage: Scales well with many operations + element types     │
+│ Disadvantage: Complex, hard to add new element types            │
+└──────────────────────────────────────────────────────────────────┘
+
+SIMPLE RULE:
+============
+Strategy:   1 object × N behaviors         → Use Strategy
+Visitor:    M object types × N operations  → Use Visitor
+            (M and N both grow)
+
+
+KEY TAKEAWAYS
+================================================================================
+
+1. Visitor Pattern applies operations to element hierarchies
+2. Separates operations from element structure completely
+3. Double dispatch: operation depends on element AND visitor type
+4. Enables adding new operations without modifying element classes
+5. Each visitor implements operation for all element types
+6. Element.accept(visitor) delegates to visitor.visit(this)
+7. Follows Open-Closed Principle for operations (open for extension)
+8. Better than Strategy when many operations + many element types
+9. Worse than Strategy when few operations or flat structure
+10. Complex but powerful pattern for sophisticated designs
+11. Visitor as state accumulator during tree traversal
+12. Double dispatch enables type-safe polymorphism without casting
+
+================================================================================
