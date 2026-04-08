@@ -1,0 +1,570 @@
+================================================================================
+                      NULL OBJECT PATTERN
+================================================================================
+
+NOTE: Null Object is actually a DESIGN pattern (not anti-pattern), but
+included here as requested. It addresses the problem of null references
+and missing objects elegantly.
+
+================================================================================
+
+WHAT IS NULL OBJECT PATTERN?
+================================================================================
+Null Object Pattern provides an object as a surrogate for null reference,
+avoiding null pointer errors and special case handling.
+
+Instead of checking for null and handling separately:
+if (object != null) { object.doSomething(); }
+
+Use a "null" object that implements the interface but does nothing:
+object.doSomething();  // Works even if null
+
+
+THE NULL PROBLEM
+================================================================================
+
+Without Null Object:
+- Null checks everywhere
+- Can forget to check (crash!)
+- Code full of conditionals
+- Defensive programming nightmare
+
+With Null Object:
+- No null checks needed
+- Returned object always valid
+- Clean, simple code
+- No crashes from null
+
+
+EXAMPLES WITHOUT NULL OBJECT
+================================================================================
+
+// BAD: Checking for null everywhere
+class Logger {
+public:
+    void log(const string& message) {
+        // Must be null-checked...
+    }
+};
+
+class Application {
+private:
+    Logger* logger;  // What if null?
+
+public:
+    void processUser(User user) {
+        if (logger != nullptr) {
+            logger->log("Processing: " + user.getName());
+        }
+
+        // ... more code
+
+        if (logger != nullptr) {
+            logger->log("User age: " + to_string(user.getAge()));
+        }
+
+        // ... more code
+
+        if (logger != nullptr) {
+            logger->log("User processed");
+        }
+    }
+};
+
+// PROBLEMS:
+// - Null checks scattered everywhere
+// - Easy to forget a check (crash)
+// - Code bloated with conditionals
+// - Hard to read
+
+
+// GOOD: Use Null Object Pattern
+class Logger {
+public:
+    virtual ~Logger() = default;
+    virtual void log(const string& message) = 0;
+};
+
+class ConsoleLogger : public Logger {
+public:
+    void log(const string& message) override {
+        cout << "[LOG] " << message << "\n";
+    }
+};
+
+class NullLogger : public Logger {
+public:
+    void log(const string& message) override {
+        // Do nothing - intentional no-op
+    }
+};
+
+class Application {
+private:
+    shared_ptr<Logger> logger;  // Never null!
+
+public:
+    Application() : logger(make_shared<NullLogger>()) { }  // Default null object
+
+    void setLogger(shared_ptr<Logger> l) {
+        logger = l ? l : make_shared<NullLogger>();  // Always valid
+    }
+
+    void processUser(const User& user) {
+        logger->log("Processing: " + user.getName());
+        // ... more code
+        logger->log("User age: " + to_string(user.getAge()));
+        // ... more code
+        logger->log("User processed");
+        // NO NULL CHECKS!
+    }
+};
+
+// BENEFITS:
+// - No null checks
+// - Always valid object
+// - Clean code
+// - No defensive programming
+
+
+MORE EXAMPLES
+================================================================================
+
+Example 1: Database Connection
+
+// WITHOUT Null Object
+class DatabaseConnection {
+public:
+    virtual void query(const string& sql) = 0;
+};
+
+class MySQLConnection : public DatabaseConnection {
+public:
+    void query(const string& sql) override {
+        // Execute query
+    }
+};
+
+class UserRepository {
+private:
+    DatabaseConnection* db;
+
+public:
+    User getUser(int id) {
+        if (db != nullptr) {
+            return db->query("SELECT * FROM users WHERE id = " + to_string(id));
+        }
+        return User::empty();  // Default user
+    }
+};
+
+// WITH Null Object
+class NullDatabaseConnection : public DatabaseConnection {
+public:
+    void query(const string& sql) override {
+        // Do nothing - no database available
+    }
+};
+
+class UserRepository {
+private:
+    shared_ptr<DatabaseConnection> db;
+
+public:
+    UserRepository()
+        : db(make_shared<NullDatabaseConnection>()) { }  // Safe default
+
+    User getUser(int id) {
+        return db->query("SELECT * FROM users WHERE id = " + to_string(id));
+        // No null checks needed!
+    }
+};
+
+
+Example 2: Email Service
+
+// WITHOUT Null Object
+class EmailService {
+public:
+    virtual void send(const string& to, const string& subject,
+                     const string& body) = 0;
+};
+
+class SMTPMailer : public EmailService {
+public:
+    void send(const string& to, const string& subject,
+             const string& body) override {
+        // Send email via SMTP
+    }
+};
+
+class UserService {
+private:
+    EmailService* emailService;
+
+public:
+    void registerUser(const User& user) {
+        // ... registration logic
+        if (emailService != nullptr) {
+            emailService->send(user.getEmail(), "Welcome!",
+                             "Welcome to our service");
+        }
+    }
+};
+
+// WITH Null Object
+class NullEmailService : public EmailService {
+public:
+    void send(const string& to, const string& subject,
+             const string& body) override {
+        // Silent no-op - email disabled
+    }
+};
+
+class UserService {
+private:
+    shared_ptr<EmailService> emailService;
+
+public:
+    UserService()
+        : emailService(make_shared<NullEmailService>()) { }
+
+    void registerUser(const User& user) {
+        // ... registration logic
+        emailService->send(user.getEmail(), "Welcome!",
+                         "Welcome to our service");
+        // Works with or without email service!
+    }
+};
+
+
+ARCHITECTURE - NULL OBJECT
+================================================================================
+
+        ┌──────────────────────┐
+        │  <<Interface>>       │
+        │     Service          │
+        ├──────────────────────┤
+        │ + doSomething()      │
+        └────────────┬─────────┘
+                     △
+         ┌───────────┼───────────┐
+         │           │           │
+    ┌──────────────┐ ┌──────────────────┐
+    │RealService   │ │ NullService      │
+    ├──────────────┤ ├──────────────────┤
+    │+doSomething()│ │+doSomething()    │
+    │ implements   │ │ does nothing     │
+    │ real logic   │ │ (no-op)          │
+    └──────────────┘ └──────────────────┘
+    (Concrete Service)  (Null Object)
+
+        ┌──────────────────────┐
+        │     Client           │
+        ├──────────────────────┤
+        │ - service: Service   │
+        │ (never null!)        │
+        ├──────────────────────┤
+        │ + useService()       │
+        │ (no null checks)     │
+        └──────────────────────┘
+
+Client → Service interface
+  ↓
+  Either RealService or NullService
+  Both valid, always available
+
+
+CONTROL FLOW
+================================================================================
+
+                  ┌────────────────┐
+                  │   START        │
+                  └────────┬───────┘
+                           │
+                           ▼
+            ┌──────────────────────────┐
+            │ Create Service           │
+            │                          │
+            │ logger = ConsoleLogger() │
+            │ OR                       │
+            │ logger = NullLogger()    │
+            │                          │
+            │ Both same interface!     │
+            └────────────┬─────────────┘
+                         │
+                         ▼
+            ┌──────────────────────────┐
+            │ Client uses service:     │
+            │                          │
+            │ logger->log(message)     │
+            │                          │
+            │ NO null checks!          │
+            └────────────┬─────────────┘
+                         │
+              ┌──────────┼──────────┐
+              │          │          │
+              ▼          ▼          ▼
+        ┌──────────┐ ┌──────────┐ ┌──────────┐
+        │If Real   │ │          │ │If Null   │
+        │Service:  │ │Identical │ │Service:  │
+        │Execute   │ │usage!    │ │Do nothing│
+        │logic     │ │          │ │(silent)  │
+        │Print log │ │          │ │No output │
+        └──────────┘ │          │ └──────────┘
+                     │          │
+                     └──────────┘
+                           │
+                           ▼
+            ┌──────────────────────────┐
+            │ Result: Clean code,      │
+            │ no null checks,          │
+            │ works either way!        │
+            └────────────┬─────────────┘
+                         │
+                         ▼
+                    ┌──────────┐
+                    │   END    │
+                    └──────────┘
+
+
+ADVANTAGES
+================================================================================
+
+1. ELIMINATES NULL CHECKS
+   - No if (obj != null) checks
+   - Cleaner code
+   - Less error-prone
+   - Fewer crashes
+
+2. CONSISTENT INTERFACE
+   - Same interface for real and null
+   - No special case handling
+   - Client code simpler
+   - Predictable behavior
+
+3. SAFE DEFAULT BEHAVIOR
+   - Default no-op object
+   - Graceful degradation
+   - Feature optional
+   - Doesn't break if missing
+
+4. REDUCED COGNITIVE LOAD
+   - Simpler code to understand
+   - No defensive programming
+   - Clear intent
+   - Less complex logic
+
+5. EASIER TO EXTEND
+   - New null objects simple
+   - Follow interface contract
+   - No special handling
+   - Consistent pattern
+
+6. BETTER TESTING
+   - Mock objects easily
+   - No null handling in tests
+   - Predictable behavior
+   - Simpler test cases
+
+7. IMPROVES OCP
+   - New behaviors via new objects
+   - Not modifying existing code
+   - Open for extension
+   - No condition proliferation
+
+
+DISADVANTAGES
+================================================================================
+
+1. EXTRA CLASS CREATION
+   - More classes to maintain
+   - Null object per interface
+   - Code structure overhead
+   - Memory for null objects
+
+2. HIDDEN BEHAVIOR
+   - Silent no-op might hide bugs
+   - Developer might not realize feature disabled
+   - No error message
+   - Could mask problems
+
+3. NOT ALWAYS APPROPRIATE
+   - Some cases need null handling
+   - Can't always ignore absence
+   - Business logic might require it
+   - Sometimes need to know if null
+
+4. INTERFACE BLOAT
+   - Interface might have 30 methods
+   - All must be no-op
+   - Seems wasteful
+   - Code duplication
+
+
+WHEN TO USE NULL OBJECT
+================================================================================
+
+✓ Use when:
+- Optional services/features
+- Graceful degradation acceptable
+- Feature works without component
+- Silent failure acceptable
+- Multiple implementations vary
+
+✗ Don't use when:
+- Need to know if component missing
+- Must handle absence explicitly
+- Business logic requires it
+- Error conditions significant
+- Debugging would be harder
+
+
+COMPARISON: NULL vs OPTIONAL
+================================================================================
+
+OLD WAY (Null):
+```cpp
+Logger* logger = nullptr;
+if (logger != nullptr) {
+    logger->log("message");
+}
+```
+
+MODERN WAY (Optional):
+```cpp
+optional<Logger> logger;
+if (logger.has_value()) {
+    logger->log("message");
+}
+```
+
+NULL OBJECT WAY:
+```cpp
+Logger logger = NullLogger();
+logger.log("message");  // Always works!
+```
+
+
+C++ EXAMPLE - NULL OBJECT
+================================================================================
+
+#include <iostream>
+#include <memory>
+#include <string>
+using namespace std;
+
+// ─────────────────────────────────────────────
+// 1. Abstract Interface
+// ─────────────────────────────────────────────
+class Logger {
+public:
+    virtual ~Logger() = default;
+    virtual void log(const string& message) = 0;
+};
+
+// ─────────────────────────────────────────────
+// 2. Real Implementation
+// ─────────────────────────────────────────────
+class ConsoleLogger : public Logger {
+public:
+    void log(const string& message) override {
+        cout << "[CONSOLE] " << message << "\n";
+    }
+};
+
+// ─────────────────────────────────────────────
+// 3. NULL OBJECT
+// ─────────────────────────────────────────────
+class NullLogger : public Logger {
+public:
+    void log(const string& message) override {
+        // Silent no-op - do nothing
+    }
+};
+
+// ─────────────────────────────────────────────
+// 4. Client Code
+// ─────────────────────────────────────────────
+class Application {
+private:
+    shared_ptr<Logger> logger;
+
+public:
+    Application()
+        : logger(make_shared<NullLogger>()) { }  // Safe default
+
+    void setLogger(shared_ptr<Logger> l) {
+        logger = l ? l : make_shared<NullLogger>();
+    }
+
+    void doWork() {
+        logger->log("Work started");
+        logger->log("Processing...");
+        logger->log("Work completed");
+        // NO NULL CHECKS!
+    }
+};
+
+// ─────────────────────────────────────────────
+// 5. Usage
+// ─────────────────────────────────────────────
+int main() {
+    Application app;
+
+    // Works without logger
+    cout << "--- Without Logger ---\n";
+    app.doWork();
+    cout << "\n";
+
+    // Works with logger
+    cout << "--- With Logger ---\n";
+    app.setLogger(make_shared<ConsoleLogger>());
+    app.doWork();
+
+    return 0;
+}
+
+
+OUTPUT:
+
+--- Without Logger ---
+(no output - NullLogger does nothing)
+
+--- With Logger ---
+[CONSOLE] Work started
+[CONSOLE] Processing...
+[CONSOLE] Work completed
+
+
+KEY DIFFERENCES
+================================================================================
+
+NULL vs EXCEPTION:
+- NULL: Silent, graceful
+- Exception: Explicit, error
+
+NULL vs OPTIONAL:
+- NULL: No null checks needed
+- Optional: Still need to check
+
+NULL vs DEFAULT PARAMETER:
+- NULL: Always object
+- Default: Might be null
+
+
+KEY TAKEAWAYS
+================================================================================
+
+1. Null Object eliminates null checks
+2. Provides valid object for absent service
+3. Implements interface with no-op behavior
+4. Safer and cleaner than null references
+5. Works for optional features
+6. Can cause silent failures (watch out!)
+7. Good for dependency injection
+8. Better readability without conditionals
+9. Appropriate for graceful degradation
+10. Not suitable when absence is significant
+
+================================================================================

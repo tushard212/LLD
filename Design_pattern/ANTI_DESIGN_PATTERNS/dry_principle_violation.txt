@@ -1,0 +1,435 @@
+================================================================================
+                   DRY PRINCIPLE VIOLATION
+================================================================================
+
+WHAT IS DRY (DON'T REPEAT YOURSELF)?
+================================================================================
+DRY Principle states: "Every piece of knowledge must have a single,
+unambiguous, authoritative representation within a system."
+
+In simpler terms: Don't repeat code or logic - if you write something twice,
+extract it into a reusable piece.
+
+Violating DRY means: Copy-pasting code instead of creating reusable functions,
+causing maintenance nightmares when that code needs to change.
+
+
+EXAMPLES OF DRY VIOLATION
+================================================================================
+
+Example 1: Copy-pasted validation logic
+
+// BAD: DRY Violation - Same code repeated 3 times
+class UserValidator {
+public:
+    bool validateEmail(const string& email) {
+        // Validation logic - COPIED AND PASTED
+        if (email.empty()) return false;
+        if (email.find('@') == string::npos) return false;
+        if (email.find('.') == string::npos) return false;
+        return email.length() > 5;
+    }
+
+    bool validateProductEmail(const string& email) {
+        // EXACT SAME CODE - COPY PASTE!
+        if (email.empty()) return false;
+        if (email.find('@') == string::npos) return false;
+        if (email.find('.') == string::npos) return false;
+        return email.length() > 5;
+    }
+
+    bool validateContactEmail(const string& email) {
+        // EXACT SAME CODE - COPY PASTE AGAIN!
+        if (email.empty()) return false;
+        if (email.find('@') == string::npos) return false;
+        if (email.find('.') == string::npos) return false;
+        return email.length() > 5;
+    }
+};
+
+// PROBLEM: Change requirement to allow minimum 6 characters
+// Must update NOT ONE, not two, but THREE places!
+// Easy to miss one copy -> bugs
+
+
+// GOOD: DRY - Extract to single function
+class UserValidator {
+private:
+    bool isValidEmailFormat(const string& email) {
+        if (email.empty()) return false;
+        if (email.find('@') == string::npos) return false;
+        if (email.find('.') == string::npos) return false;
+        return email.length() > 5;
+    }
+
+public:
+    bool validateEmail(const string& email) {
+        return isValidEmailFormat(email);
+    }
+
+    bool validateProductEmail(const string& email) {
+        return isValidEmailFormat(email);
+    }
+
+    bool validateContactEmail(const string& email) {
+        return isValidEmailFormat(email);
+    }
+};
+
+// BENEFIT: Change in ONE place -> fixed everywhere
+
+
+Example 2: Duplicated database queries
+
+// BAD: DRY Violation
+class UserRepository {
+public:
+    vector<User> findActiveUsers() {
+        // Query logic - COPY PASTED IN MULTIPLE METHODS
+        MySQLConnection conn("localhost", "users_db");
+        conn.connect();
+        ResultSet rs = conn.execute(
+            "SELECT * FROM users WHERE status = 'active'"
+        );
+
+        vector<User> users;
+        while (rs.next()) {
+            users.push_back(User(rs.getInt("id"), rs.getString("name")));
+        }
+        conn.close();
+        return users;
+    }
+
+    vector<User> findPremiumUsers() {
+        // COPY/PASTE - Database connection logic repeated!
+        MySQLConnection conn("localhost", "users_db");
+        conn.connect();
+        ResultSet rs = conn.execute(
+            "SELECT * FROM users WHERE premium = 1"
+        );
+
+        vector<User> users;
+        while (rs.next()) {
+            users.push_back(User(rs.getInt("id"), rs.getString("name")));
+        }
+        conn.close();
+        return users;
+    }
+
+    vector<User> findRecentUsers() {
+        // COPY/PASTE AGAIN - Same connection logic!
+        MySQLConnection conn("localhost", "users_db");
+        conn.connect();
+        ResultSet rs = conn.execute(
+            "SELECT * FROM users ORDER BY created_date DESC"
+        );
+
+        vector<User> users;
+        while (rs.next()) {
+            users.push_back(User(rs.getInt("id"), rs.getString("name")));
+        }
+        conn.close();
+        return users;
+    }
+};
+
+// PROBLEM: Connection logic duplicated 3x
+// Need to change connection string? Update 3 places
+// Need to add error handling? Update 3 places
+
+
+// GOOD: DRY - Extract common pattern
+class UserRepository {
+private:
+    vector<User> executeQuery(const string& sql) {
+        MySQLConnection conn("localhost", "users_db");
+        conn.connect();
+        ResultSet rs = conn.execute(sql);
+
+        vector<User> users;
+        while (rs.next()) {
+            users.push_back(User(rs.getInt("id"), rs.getString("name")));
+        }
+        conn.close();
+        return users;
+    }
+
+public:
+    vector<User> findActiveUsers() {
+        return executeQuery("SELECT * FROM users WHERE status = 'active'");
+    }
+
+    vector<User> findPremiumUsers() {
+        return executeQuery("SELECT * FROM users WHERE premium = 1");
+    }
+
+    vector<User> findRecentUsers() {
+        return executeQuery(
+            "SELECT * FROM users ORDER BY created_date DESC"
+        );
+    }
+};
+
+// BENEFIT: Connection logic in ONE place
+// Change once -> fixed everywhere
+
+
+Example 3: Repeated calculation logic
+
+// BAD: DRY Violation
+class Invoice {
+public:
+    double calculateTotalForOrder1() {
+        double total = 0;
+        for (const auto& item : orderItems1) {
+            double itemPrice = item.price;
+            double discount = item.discount;
+            double taxRate = 0.1;
+            total += (itemPrice - discount) * (1 + taxRate);
+        }
+        return total;
+    }
+
+    double calculateTotalForOrder2() {
+        // EXACT SAME CALCULATION - COPY PASTE!
+        double total = 0;
+        for (const auto& item : orderItems2) {
+            double itemPrice = item.price;
+            double discount = item.discount;
+            double taxRate = 0.1;
+            total += (itemPrice - discount) * (1 + taxRate);
+        }
+        return total;
+    }
+
+    double calculateTotalForOrder3() {
+        // EXACT SAME CALCULATION - COPY PASTE AGAIN!
+        double total = 0;
+        for (const auto& item : orderItems3) {
+            double itemPrice = item.price;
+            double discount = item.discount;
+            double taxRate = 0.1;
+            total += (itemPrice - discount) * (1 + taxRate);
+        }
+        return total;
+    }
+};
+
+// PROBLEM: Tax rate needs to change from 10% to 12%
+// Must update 3 places! Easy to miss one.
+
+
+// GOOD: DRY - Extract calculation
+class Invoice {
+private:
+    const double TAX_RATE = 0.1;
+
+    double calculateItemTotal(const Item& item) {
+        return (item.price - item.discount) * (1 + TAX_RATE);
+    }
+
+    double calculateOrderTotal(const vector<Item>& items) {
+        double total = 0;
+        for (const auto& item : items) {
+            total += calculateItemTotal(item);
+        }
+        return total;
+    }
+
+public:
+    double calculateTotalForOrder1() {
+        return calculateOrderTotal(orderItems1);
+    }
+
+    double calculateTotalForOrder2() {
+        return calculateOrderTotal(orderItems2);
+    }
+
+    double calculateTotalForOrder3() {
+        return calculateOrderTotal(orderItems3);
+    }
+};
+
+// BENEFIT: Tax rate defined in ONE place
+// Change once -> affects all orders
+
+
+PROBLEMS WITH DRY VIOLATIONS
+================================================================================
+
+1. MAINTENANCE NIGHTMARE
+   - Change logic in one place
+   - Must update 5 other places
+   - Easy to miss a copy
+   - Inconsistencies emerge
+
+2. BUGS FROM INCONSISTENCY
+   - Update 4 copies but miss 1
+   - Different behavior in different places
+   - Hard to debug (works here, not there?)
+   - Users confused
+
+3. WASTED TIME
+   - Copy-paste faster than refactor (short term)
+   - But costs 10x more time fixing later
+   - Updates take 5x as long
+   - Technical debt accumulates
+
+4. COGNITIVE BURDEN
+   - Multiple copies to understand
+   - Mental work tracking all copies
+   - Hard to find all places that need updating
+   - Brain overload
+
+5. VERSION CONTROL NIGHTMARE
+   - Same changes in multiple files
+   - Harder to review changes
+   - More commits for same fix
+   - History becomes messy
+
+6. TESTING BURDEN
+   - Need to test every copy separately
+   - Tests are duplicated
+   - Hard to ensure consistency
+   - Test maintenance difficult
+
+
+HOW TO FIX DRY VIOLATIONS
+================================================================================
+
+1. IDENTIFY DUPLICATE CODE
+   - Look for similar patterns
+   - Search for copy-paste indicators
+   - Tools can find similar code
+   - Code review catches it
+
+2. EXTRACT TO COMMON FUNCTION
+   - Create shared function
+   - Call from multiple places
+   - Pass different parameters
+   - Reduces to single source
+
+3. USE CONSTANTS FOR MAGIC VALUES
+   - Magic numbers (3.14159, 1000)
+   - Define as const
+   - Single point of change
+   - Clear documentation
+
+4. USE CONFIGURATION
+   - Values in configuration files
+   - Not hardcoded in multiple places
+   - Change file -> all instances update
+   - Easy to manage
+
+5. USE INHERITANCE/POLYMORPHISM
+   - Common code in base class
+   - Share across subclasses
+   - Override as needed
+   - Avoid duplication
+
+
+ADVANTAGES
+================================================================================
+
+(Why developers violate DRY)
+
+1. FASTER TO COPY-PASTE (Short term)
+   - Don't need to think about design
+   - Works immediately
+   - Seems faster
+
+2. LESS REFACTORING
+   - No time spent on abstraction
+   - Get feature done faster
+   - Seems productive
+
+
+DISADVANTAGES
+================================================================================
+
+(Why DRY violations are BAD)
+
+1. MAINTENANCE NIGHTMARE
+   - Must update multiple places
+   - Easy to miss a copy
+   - Inconsistencies develop
+
+2. BUGS
+   - Different behavior in different places
+   - Hard to find all instances
+   - Regressions common
+
+3. WASTED TIME
+   - Copy-paste saves time now
+   - Costs 10x more fixing later
+   - Every update slower
+
+4. TECHNICAL DEBT
+   - Accumulated over time
+   - Gets worse, not better
+   - Eventually unpayable
+
+5. COGNITIVE BURDEN
+   - Hard to understand
+   - Multiple versions to track
+   - Update anxiety (what did I miss?)
+
+
+REFACTORING STRATEGIES
+================================================================================
+
+1. EXTRACT METHOD
+   - Common code into function
+   - Call from multiple places
+   - Reduces duplication
+
+2. EXTRACT CLASS
+   - Related code into class
+   - Shared behavior
+   - Single responsibility
+
+3. EXTRACT CONSTANT
+   - Magic values into named constant
+   - Single point of change
+   - Clear documentation
+
+4. USE TEMPLATES/GENERICS
+   - Generic code for similar types
+   - Less duplication
+   - Type safe
+
+5. USE CONFIGURATION
+   - Values in files
+   - Not duplicated in code
+   - Easy to change
+
+
+TOOLS TO DETECT DRY VIOLATIONS
+================================================================================
+
+- Code similarity tools
+- Copy-paste detection
+- Clone detection analysis
+- Linters with duplicate checks
+- Code review tools
+- Manual code review
+- Refactoring IDEs
+
+
+KEY TAKEAWAYS
+================================================================================
+
+1. DRY: Don't Repeat Yourself
+2. One source of truth for every piece of knowledge
+3. Extract duplicated code into reusable pieces
+4. Copy-paste saves time now, costs time later
+5. Maintenance is easier with DRY code
+6. Bugs from inconsistency avoided
+7. Use constants for magic values
+8. Use configuration for settings
+9. Use functions for repeated logic
+10. Use classes for related logic
+11. Code review catches DRY violations
+12. Technical debt from DRY violations accumulates
+
+================================================================================

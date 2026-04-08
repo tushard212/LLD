@@ -1,0 +1,351 @@
+================================================================================
+                 HARDCODED VALUES ANTI-PATTERN
+================================================================================
+
+WHAT IS HARDCODED VALUES ANTI-PATTERN?
+================================================================================
+Hardcoding is embedding values directly into source code instead of:
+- Using configuration files
+- Using constants
+- Using configuration files
+- Using environment variables
+- Using dependency injection
+
+Examples of hardcoded values:
+- Database connection strings hardcoded in source
+- API endpoints hardcoded as strings
+- Passwords/API keys in code
+- Magic numbers (3.14159, 1000, 256)
+- File paths hardcoded
+- Server IPs hardcoded
+- Timeouts hardcoded
+- Email addresses hardcoded
+
+
+WHY HARDCODING IS BAD
+================================================================================
+1. INFLEXIBLE
+   - Can't change without recompiling
+   - Different values for dev/test/prod = different builds
+   - Impossible to customize per environment
+   - Wastes time recompiling for small changes
+
+2. SECURITY RISK
+   - Passwords visible in source code
+   - API keys exposed to everyone with access
+   - Credentials in version control forever
+   - Anyone reading code sees secrets
+
+3. DIFFICULT TO MAINTAIN
+   - Where is that value defined?
+   - Scattered throughout codebase
+   - Same value duplicated 50 times
+   - Changing one place misses others
+
+4. ERROR PRONE
+   - Values change, code doesn't
+   - Database moved but code points to old address
+   - Easy to have inconsistencies
+   - Hard to track all occurrences
+
+5. DIFFICULT TO TEST
+   - Tests use production values
+   - Can't run without external dependencies
+   - Hard to mock or override
+   - Test data mixed with code
+
+
+EXAMPLES OF HARDCODED VALUES ANTI-PATTERN
+================================================================================
+
+// BAD: Hardcoded values everywhere
+class UserService {
+public:
+    void sendEmail(const string& email, const string& message) {
+        SmtpClient client;
+        client.connect("smtp.gmail.com", 587);  // Hardcoded!
+        client.authenticate("admin@company.com", "MyPassword123");  // Hardcoded!
+        client.send(email, "noreply@company.com", message);  // Hardcoded!
+    }
+
+    bool validatePassword(const string& password) {
+        if (password.length() < 8) return false;  // Magic number!
+        return true;
+    }
+
+    User getUserFromDatabase(const int userId) {
+        DatabaseConnection db;
+        db.connect("192.168.1.100", 5432);  // Hardcoded IP!
+        db.selectDatabase("production_db");  // Hardcoded database!
+        return db.query("SELECT * FROM users WHERE id = " + to_string(userId));
+    }
+
+    void logFailure(const string& msg) {
+        FILE* f = fopen("/var/log/app/errors.log", "a");  // Hardcoded path!
+        fprintf(f, "%s\n", msg.c_str());
+        fclose(f);
+    }
+
+    void processPayment(double amount) {
+        // Hardcoded payment details
+        PaymentGateway gateway;
+        gateway.setMerchantId("MERCHANT_123");  // Hardcoded!
+        gateway.setApiKey("sk_live_51H1jK2L3M4N5O6");  // HUGE SECURITY ISSUE!
+        gateway.setApiEndpoint("https://api.stripe.com");  // Hardcoded!
+        gateway.processCharge(amount);
+    }
+
+    void scheduleBackup() {
+        int backupInterval = 3600;  // Hardcoded seconds!
+        if (DateTime::getCurrentTime().hour() == 2) {  // Hardcoded time!
+            backup();
+        }
+    }
+};
+
+// PROBLEMS:
+// - Can't change settings without recompiling
+// - Passwords in source code = SECURITY BREACH
+// - Different builds for dev/test/prod
+// - Hard-coded database IP - what if it changes?
+// - Hard-coded paths - doesn't work on Windows
+// - Magic numbers without explanation
+
+
+GOOD: Using Configuration
+================================================================================
+
+// Configuration file: config.json
+{
+    "database": {
+        "host": "localhost",
+        "port": 5432,
+        "name": "development_db",
+        "username": "dev_user"
+    },
+    "email": {
+        "smtp_host": "smtp.gmail.com",
+        "smtp_port": 587,
+        "from_address": "noreply@company.com"
+    },
+    "security": {
+        "min_password_length": 8,
+        "password_max_attempts": 5
+    },
+    "logging": {
+        "log_directory": "/var/log/app/",
+        "log_level": "INFO"
+    },
+    "payment": {
+        "api_endpoint": "https://api.stripe.com",
+        "merchant_id": "MERCHANT_123"
+    }
+}
+
+// Environment variables for secrets:
+STRIPE_API_KEY=sk_live_51H1jK2L3M4N5O6
+DATABASE_PASSWORD=MySecurePassword
+EMAIL_PASSWORD=MyEmailPassword
+
+// Code: Uses configuration
+class ConfigManager {
+private:
+    static map<string, string> config;
+
+public:
+    static void loadConfig(const string& filename) {
+        // Load from JSON file
+        // Parse and store
+    }
+
+    static string get(const string& key) {
+        return config[key];
+    }
+};
+
+class UserService {
+public:
+    void sendEmail(const string& email, const string& message) {
+        SmtpClient client;
+        client.connect(ConfigManager::get("email.smtp_host"),
+                      stoi(ConfigManager::get("email.smtp_port")));
+
+        // Password from environment variable
+        string password = getenv("EMAIL_PASSWORD");
+        client.authenticate(ConfigManager::get("email.from_address"), password);
+        client.send(email, ConfigManager::get("email.from_address"), message);
+    }
+
+    bool validatePassword(const string& password) {
+        int minLen = stoi(ConfigManager::get("security.min_password_length"));
+        return password.length() >= minLen;
+    }
+
+    User getUserFromDatabase(int userId) {
+        DatabaseConnection db;
+        db.connect(ConfigManager::get("database.host"),
+                  stoi(ConfigManager::get("database.port")));
+        db.selectDatabase(ConfigManager::get("database.name"));
+        return db.query("SELECT * FROM users WHERE id = " + to_string(userId));
+    }
+};
+
+// BENEFITS:
+// - Configuration file defines behavior
+// - Can change without recompiling
+// - Different configs for dev/test/prod
+// - Secrets never in source code
+// - Easy to version and track
+
+
+PROBLEMS WITH HARDCODED VALUES
+================================================================================
+
+1. INFLEXIBILITY
+   - Different build for each environment
+   - Can't reuse binaries
+   - Recompile for every change
+
+2. SECURITY RISK
+   - Hardcoded passwords = security breach
+   - API keys visible to everyone
+   - Credentials in version control
+   - Can't rotate secrets easily
+
+3. MAINTENANCE NIGHTMARE
+   - Values scattered everywhere
+   - Hard to find all occurrences
+   - Easy to miss some when changing
+   - Inconsistencies between copies
+
+4. DIFFICULT TO TEST
+   - Tests use wrong values
+   - Can't test different scenarios
+   - External dependency coupling
+   - Hard to mock or override
+
+5. POOR DEPLOYMENT
+   - Different builds for each environment
+   - Large binary files
+   - Long build time
+   - Error-prone release process
+
+6. ENVIRONMENT SPECIFIC
+   - Code doesn't work on other machines
+   - File paths Windows vs Linux
+   - Database on different server
+   - IP addresses change
+
+
+HOW TO FIX HARDCODED VALUES
+================================================================================
+
+1. EXTRACT TO CONFIGURATION FILE
+   - JSON, XML, YAML, TOML, INI
+   - Application loads on startup
+   - Easy to change values
+   - Read-only at runtime
+
+2. USE ENVIRONMENT VARIABLES
+   - For sensitive data (passwords, API keys)
+   - Set during deployment
+   - Never committed to version control
+   - Different value per environment
+
+3. USE CONSTANTS
+   - For application-wide constants
+   - Define at top of file
+   - Clear name explains purpose
+   - Easy to find and update
+
+4. DEPENDENCY INJECTION
+   - Pass values into objects
+   - Objects don't know where values come from
+   - Easy to test (inject different values)
+   - Flexible and testable
+
+
+ADVANTAGES
+================================================================================
+
+(Why developers hardcode values)
+
+1. QUICK TO IMPLEMENT
+   - No time to set up configuration
+   - Works immediately
+   - No infrastructure needed
+   - Very fast to write
+
+2. SIMPLE FOR SMALL PROJECTS
+   - Single developer project
+   - Doesn't move machines
+   - Values rarely change
+   - Seems unnecessary overhead
+
+
+DISADVANTAGES
+================================================================================
+
+(Why hardcoded values are BAD)
+
+1. INFLEXIBLE
+   - Can't change without recompiling
+   - Different builds for each environment
+   - Wastes time and effort
+
+2. SECURITY RISK
+   - Passwords in source code
+   - API keys exposed
+   - Credentials in version control
+
+3. MAINTENANCE NIGHTMARE
+   - Values scattered everywhere
+   - Easy to miss when changing
+   - Hard to find all occurrences
+
+4. DIFFICULT TO TEST
+   - Can't test different scenarios
+   - Hard to mock values
+   - Tests might affect production
+
+5. POOR DEPLOYMENT PROCESS
+   - Different builds for each environment
+   - Complex release procedure
+   - Error-prone manual changes
+
+6. ENVIRONMENT SPECIFIC
+   - Code doesn't work on other machines
+   - Platform specific paths
+   - Database moved = need recompile
+
+
+BEST PRACTICES
+================================================================================
+
+✓ Use configuration files for environment-specific values
+✓ Use environment variables for secrets
+✓ Use named constants for meaningful values
+✓ Document what each configuration value means
+✓ Provide default configuration examples
+✓ Validate configuration on startup
+✓ Use assertions/checks for required config
+✓ Never commit secrets to version control
+✓ Use .gitignore for configuration files
+✓ Document set-up procedure for developers
+
+
+KEY TAKEAWAYS
+================================================================================
+
+1. Never hardcode configuration values
+2. Use configuration files or environment variables
+3. Secrets should NEVER be in source code
+4. Use named constants for magic numbers
+5. Configuration enables flexible deployment
+6. Different config files for dev/test/prod
+7. Separate code from configuration
+8. Easy to change values without rebuilding
+9. Improves security and flexibility
+10. Makes testing and deployment easier
+
+================================================================================
