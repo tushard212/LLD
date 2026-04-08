@@ -1,0 +1,893 @@
+================================================================================
+                        MEMENTO DESIGN PATTERN
+================================================================================
+
+WHY IT WAS NEEDED
+================================================================================
+Problem: How to save and restore object state without violating encapsulation?
+
+Example WITHOUT Memento Pattern:
+- Database transaction with multiple operations
+- Operation 1: Balance = 1000
+- Operation 2: Balance = 900 (withdrawal)
+- Operation 3: Balance = 1200 (deposit)
+- What if something goes wrong? Need to ROLLBACK to previous state
+- Extracting all state members from object violates encapsulation
+- Storing state externally makes object state inconsistent
+- No clean way to save multiple checkpoints
+
+Traditional approach problems:
+- Make state public → Violates encapsulation
+- Save state manually → Prone to missing properties
+- Tight coupling → Can't change object internals without breaking restore
+- Multiple copies → No clean way to manage versions
+- Undo/Redo becomes messy → Can't maintain state history
+
+Solution: Memento Pattern externalizes object state WITHOUT breaking encapsulation
+- Originator creates Memento (snapshot of state)
+- Memento is immutable (preserves point-in-time state)
+- Caretaker stores Mementos (manages history)
+- Restore by creating new object from Memento
+
+Result: Clean state management, undo/redo, transactions, checkpoints
+
+
+WHAT PROBLEM IT SOLVES
+================================================================================
+- Saves state without exposing internal structure
+- Enables undo/redo functionality
+- Supports transactional rollback
+- Maintains state history
+- Separates state management from core logic
+- Preserves encapsulation
+- Enables creation of multiple state snapshots
+- Easy to implement save/restore points
+
+
+HOW IT SOLVES THE PROBLEM (CONCEPT)
+================================================================================
+1. Originator: Object whose state needs to be saved
+   - Creates Memento with current state
+   - Restores state from Memento
+
+2. Memento: Snapshot of Originator state at point in time
+   - Stores immutable state data
+   - Only Originator can access (or package-private)
+   - Cannot be modified after creation
+
+3. Caretaker: Manages collection of Mementos
+   - Stores Mementos (undo stack, transaction log)
+   - Provides Mementos to Originator for restoration
+   - Doesn't know/care about Memento contents
+   - Example: UndoManager, TransactionLog
+
+Flow: Originator → creates → Memento ← stores ← Caretaker
+      Originator ← restores ← Memento ← provides ← Caretaker
+
+
+DATABASE TRANSACTION EXAMPLE - ARCHITECTURE
+================================================================================
+
+Real-world Scenario: Bank Account Transaction Management
+========================================================
+
+Account State:
+  - balance: 1000
+  - accountNumber: "12345"
+  - transactions: [list of transactions]
+
+Operations:
+  1. Withdraw 100 → balance = 900
+  2. Deposit 300 → balance = 1200
+  3. Transfer 50 → balance = 1150
+  4. Error during operation 4 → ROLLBACK to checkpoint
+
+Checkpoints needed:
+  - Before each operation
+  - During critical transactions
+  - For audit trail
+
+
+        ┌──────────────────────┐
+        │     Originator       │
+        │  (BankAccount)       │
+        ├──────────────────────┤
+        │ - accountNo          │
+        │ - balance            │
+        │ - transactionList[]  │
+        │ - status             │
+        ├──────────────────────┤
+        │ + withdraw()         │
+        │ + deposit()          │
+        │ + transfer()         │
+        │ + saveToMemento()    │
+        │ + restoreFromMemento │
+        │   (memento)          │
+        │ + getState()         │
+        └──────────────────────┘
+                  │
+          creates │
+                  ▼
+        ┌──────────────────────┐
+        │      Memento         │
+        │  (TransactionRecord) │
+        ├──────────────────────┤
+        │ - accountNo          │ (immutable)
+        │ - balance            │
+        │ - transactionList[]  │
+        │ - status             │
+        │ - timestamp          │
+        │ - getState()         │ (package-private)
+        └──────────────────────┘
+                  △
+            stores │
+                  │
+        ┌──────────────────────┐
+        │     Caretaker        │
+        │  (TransactionManager)│
+        ├──────────────────────┤
+        │ - mementos: Memento[]│
+        │ - currentIndex       │
+        ├──────────────────────┤
+        │ + saveCheckpoint()   │
+        │ + rollback()         │
+        │ + commit()           │
+        │ + undo()             │
+        │ + redo()             │
+        │ + getHistory()       │
+        └──────────────────────┘
+
+
+TRANSACTION FLOW DIAGRAM
+================================================================================
+
+Initial State: Balance = 1000
+
+        ┌─────────────────────────┐
+        │  BankAccount            │
+        │  balance = 1000         │
+        │  status = OK            │
+        └────────────┬────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────────────┐
+        │ TransactionManager:             │
+        │ Checkpoint 0 CREATED            │
+        │ (Memento #0: balance=1000)      │
+        │                                 │
+        │ History: [Memento#0]            │
+        └────────────┬────────────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────┐
+        │ Operation 1: Withdraw   │
+        │ -100                    │
+        │                         │
+        │ balance = 900           │
+        └────────────┬────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────────────┐
+        │ TransactionManager:             │
+        │ Checkpoint 1 CREATED            │
+        │ (Memento #1: balance=900)       │
+        │                                 │
+        │ History: [Memento#0, Memento#1]│
+        └────────────┬────────────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────┐
+        │ Operation 2: Deposit    │
+        │ +300                    │
+        │                         │
+        │ balance = 1200          │
+        └────────────┬────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────────────┐
+        │ TransactionManager:             │
+        │ Checkpoint 2 CREATED            │
+        │ (Memento #2: balance=1200)      │
+        │                                 │
+        │ History: [Memento#0, Memento#1, │
+        │          Memento#2]             │
+        └────────────┬────────────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────────────┐
+        │ Operation 3: Transfer to        │
+        │ another account: -50            │
+        │ (This fails! Connection error)  │
+        │                                 │
+        │ ERROR DETECTED!                 │
+        │ balance = 1150 (partial)        │
+        └────────────┬────────────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────────────┐
+        │ TransactionManager:             │
+        │ ROLLBACK to Checkpoint 2        │
+        │                                 │
+        │ Restore: Memento #2             │
+        │ BankAccount restored:           │
+        │ balance = 1200                  │
+        │ status = OK                     │
+        │ (Transfer discarded)            │
+        │                                 │
+        │ History: [Memento#0, Memento#1, │
+        │          Memento#2] (reset)     │
+        └────────────┬────────────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────┐
+        │ Transaction Complete    │
+        │ Safe state maintained   │
+        │ balance = 1200          │
+        └─────────────────────────┘
+
+
+UNDO/REDO FLOW WITH MEMENTO
+================================================================================
+
+        ┌─────────────────────────────────┐
+        │ Initial State                   │
+        │ balance = 1000                  │
+        │ CheckpointStack: [Memento#0]    │
+        │CurrentIndex: 0                 │
+        └────────────┬────────────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────────────┐
+        │ Withdraw 100                    │
+        │ balance = 900                   │
+        │ CheckpointStack: [M#0, M#1]     │
+        │ CurrentIndex: 1                 │
+        └────────────┬────────────────────┘
+                     │
+        ┌────────────┼────────────┐
+        │            │            │
+        ▼            ▼            ▼
+    UNDO       Withdraw    Deposit
+    button     -100 more   +300 more
+        │            │            │
+        │            ▼            ▼
+        │    ┌───────────────┐ ┌─────────────┐
+        │    │balance = 800  │ │balance=1200 │
+        │    │M: [M#0,M#1,M#2│ │M:[M#0,M#1,  │
+        │    │Index: 2       │ │  M#2, M#3]  │
+        │    └───────────────┘ │Index: 3     │
+        │                      └─────────────┘
+        │
+        ▼
+    ┌─────────────────────────────────┐
+    │ UNDO Clicked                    │
+    │ Move back in stack              │
+    │ Restore Memento #0              │
+    │ balance = 1000                  │
+    │ CheckpointStack: still [M#0..]  │
+    │ CurrentIndex: 0                 │
+    └─────────┬───────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────┐
+    │ Can REDO to get back to B=900   │
+    │ Move forward in stack           │
+    │ Restore Memento #1              │
+    │ balance = 900                   │
+    │ CurrentIndex: 1                 │
+    └─────────────────────────────────┘
+
+
+ADVANTAGES
+================================================================================
+
+1. PRESERVES ENCAPSULATION
+   - State saved/restored without exposing internals
+   - Object structure remains private
+   - No need to make fields public
+   - Safe state management
+   - Clean separation of concerns
+
+2. ENABLES UNDO/REDO FUNCTIONALITY
+   - Navigate history of states
+   - Multiple saves and restores
+   - Powerful user interaction
+   - Easy to implement undo stacks
+   - Improves user experience
+
+3. SUPPORTS TRANSACTION ROLLBACK
+   - Save checkpoint before operation
+   - Rollback if operation fails
+   - Atomic transaction semantics
+   - Database-like safety
+   - Consistent state guarantees
+
+4. STATE VERSIONING
+   - Multiple snapshots of state
+   - Track state history over time
+   - Audit trail capability
+   - Time-travel debugging
+   - State comparison capabilities
+
+5. FOLLOWS SINGLE RESPONSIBILITY PRINCIPLE
+   - Originator: manages core logic
+   - Memento: stores state snapshot
+   - Caretaker: manages history
+   - Each class has clear purpose
+   - Easy to understand and maintain
+
+6. FLEXIBLE STATE MANAGEMENT
+   - Can store any state (simple or complex)
+   - Memento is generic concept
+   - Works with any Originator
+   - Reusable pattern
+   - Saves without knowing internals
+
+7. TESTABILITY
+   - Can mock Mementos for testing
+   - Test undo/redo separately
+   - Mock Caretaker for rollback testing
+   - Each component independently testable
+   - Simpler unit tests
+
+8. CLEAN API
+   - Client doesn't know about state internals
+   - Simple interface (save/restore)
+   - No complex parameter passing
+   - Easy to use and understand
+   - Reduces coupling
+
+
+DISADVANTAGES
+================================================================================
+
+1. MEMORY OVERHEAD
+   - Each Memento stores complete state
+   - Multiple Mementos = multiple copies
+   - Large objects = significant memory waste
+   - Stack-based undo = grows with operations
+   - Not suitable for memory-constrained systems
+
+2. PERFORMANCE IMPACT
+   - Creating Memento takes time (copy state)
+   - Restoring Memento takes time (copy back)
+   - Frequency of saves → performance hit
+   - Not ideal for real-time systems
+   - Storage and retrieval latency
+
+3. DIFFICULT TO HANDLE COMPLEX STATE
+   - Circular references in state
+   - Shared mutable objects
+   - Deep copy vs shallow copy issues
+   - Must serialize/deserialize properly
+   - Error-prone implementation
+
+4. SERIALIZATION COMPLEXITY
+   - Some objects cannot serialize (streams, connections)
+   - Transient fields need special handling
+   - Version compatibility issues
+   - Custom serialization logic needed
+   - Increases code complexity
+
+5. NO SELECTIVE STATE SAVING
+   - Whole state saved (not partial)
+   - Cannot save only changed fields
+   - Inefficient for large state changes
+   - No delta/diff capabilities
+   - More memory than necessary
+
+6. DIFFICULT TO MANAGE HISTORY
+   - Large history = large memory usage
+   - Need strategies to limit history
+   - Cleanup/pruning logic required
+   - Complexity in caretaker
+   - Thread safety issues with concurrent access
+
+7. EXPOSURE OF STATE STRUCTURE
+   - Memento structure reflects Originator
+   - Changes to Originator = change Memento
+   - Cannot easily hide internal structure
+   - Breaks encapsulation in some ways
+   - Tight coupling to object structure
+
+8. NOT SUITABLE FOR ALL CASES
+   - Expensive for frequently changing state
+   - Overkill for simple undo (single level)
+   - Language-dependent serialization
+   - Complex with external state
+   - May be premature optimization
+
+
+WHEN TO USE
+================================================================================
+
+✓ Use when: Need undo/redo functionality
+✓ Use when: Transaction rollback required
+✓ Use when: State checkpoints needed
+✓ Use when: Want to preserve encapsulation
+✓ Use when: Need state history/audit trail
+✓ Use when: Avoid exposing internal state
+✓ Use when: Multiple save/restore scenarios
+✓ Use when: "Snapshot" functionality required
+
+✗ Don't use when: Memory is critical constraint
+✗ Don't use when: State changes very frequently
+✗ Don't use when: Simple single-level undo needed
+✗ Don't use when: State contains non-serializable objects
+✗ Don't use when: Real-time with strict latency requirements
+✗ Don't use when: State rarely needs restoration
+✗ Don't use when: Complexity not justified by use case
+
+
+REAL-WORLD EXAMPLES
+================================================================================
+
+1. DATABASE TRANSACTIONS (Our example)
+   - Memento: Transaction record with state snapshot
+   - Caretaker: Transaction log manager
+   - Undo: ROLLBACK to checkpoint
+
+2. TEXT EDITORS
+   - Memento: Document state at point in time
+   - Caretaker: Undo/Redo stack (Ctrl+Z, Ctrl+Y)
+   - Enable: Unlimited undo/redo
+
+3. GAME SAVE SYSTEMS
+   - Memento: Game state snapshot
+   - Caretaker: Save game file manager
+   - Restore: Load saved game
+
+4. VERSION CONTROL (Git)
+   - Memento: Commit (snapshot of codebase)
+   - Caretaker: Repository, commit history
+   - Restore: Checkout previous version
+
+5. PHOTO EDITING SOFTWARE
+   - Memento: Image state at edit point
+   - Caretaker: History panel
+   - Undo/Redo: Step through edits
+
+6. CONFIGURATION MANAGEMENT
+   - Memento: Configuration snapshot
+   - Caretaker: Configuration history
+   - Restore: Previous configurations
+
+7. VIDEO PLAYER RESUME FEATURE
+   - Memento: Playback position, state
+   - Caretaker: Resume data storage
+   - Restore: Continue from last position
+
+
+C++ EXAMPLE - DATABASE TRANSACTION MANAGEMENT
+================================================================================
+
+#include <iostream>
+#include <vector>
+#include <memory>
+#include <string>
+#include <ctime>
+using namespace std;
+
+// ─────────────────────────────────────────────
+// 1. Memento - Immutable state snapshot
+// ─────────────────────────────────────────────
+class TransactionMemento {
+private:
+    string accountNumber;
+    double balance;
+    string status;
+    string timestamp;
+    vector<string> transactionLog;
+
+public:
+    TransactionMemento(const string& accNo, double bal,
+                      const string& stat, const string& time,
+                      const vector<string>& log)
+        : accountNumber(accNo), balance(bal), status(stat),
+          timestamp(time), transactionLog(log) {}
+
+    // Package-private accessor (const, can't modify)
+    const string& getAccountNumber() const { return accountNumber; }
+    double getBalance() const { return balance; }
+    const string& getStatus() const { return status; }
+    const string& getTimestamp() const { return timestamp; }
+    const vector<string>& getLog() const { return transactionLog; }
+
+    void display() const {
+        cout << "  [Memento] Account: " << accountNumber
+             << " | Balance: $" << balance
+             << " | Status: " << status
+             << " | Time: " << timestamp << "\n";
+    }
+};
+
+// ─────────────────────────────────────────────
+// 2. Originator - Object whose state changes
+// ─────────────────────────────────────────────
+class BankAccount {
+private:
+    string accountNumber;
+    double balance;
+    string status;
+    vector<string> transactionLog;
+
+public:
+    BankAccount(const string& accNo, double initialBalance)
+        : accountNumber(accNo), balance(initialBalance), status("OK") {
+        transactionLog.push_back("Account created with balance: $" + to_string(initialBalance));
+    }
+
+    // ─── Core operations ───
+    bool withdraw(double amount) {
+        if (amount > balance) {
+            cout << "ERROR: Insufficient balance!\n";
+            status = "ERROR";
+            transactionLog.push_back("FAILED: Withdrawal of $" + to_string(amount));
+            return false;
+        }
+        balance -= amount;
+        transactionLog.push_back("Withdrawal: -$" + to_string(amount));
+        cout << "Withdrawn: $" << amount << " | New balance: $" << balance << "\n";
+        return true;
+    }
+
+    bool deposit(double amount) {
+        balance += amount;
+        transactionLog.push_back("Deposit: +$" + to_string(amount));
+        cout << "Deposited: $" << amount << " | New balance: $" << balance << "\n";
+        return true;
+    }
+
+    bool transfer(double amount, const string& toAccount) {
+        if (amount > balance) {
+            cout << "ERROR: Cannot transfer $" << amount << "\n";
+            status = "ERROR";
+            transactionLog.push_back("FAILED: Transfer to " + toAccount);
+            return false;
+        }
+        balance -= amount;
+        transactionLog.push_back("Transfer to " + toAccount + ": -$" + to_string(amount));
+        cout << "Transferred: $" << amount << " to " << toAccount
+             << " | New balance: $" << balance << "\n";
+        return true;
+    }
+
+    // ─── State management ───
+    shared_ptr<TransactionMemento> saveToMemento() const {
+        cout << "[SAVE] Creating checkpoint for account " << accountNumber << "\n";
+        return make_shared<TransactionMemento>(
+            accountNumber, balance, status, "2024-04-08 14:30:00",
+            transactionLog
+        );
+    }
+
+    void restoreFromMemento(const shared_ptr<TransactionMemento>& memento) {
+        cout << "[RESTORE] Restoring account " << accountNumber << " from checkpoint\n";
+        balance = memento->getBalance();
+        status = memento->getStatus();
+        transactionLog = memento->getLog();
+        cout << "  Restored to balance: $" << balance << "\n";
+    }
+
+    // ─── Display ───
+    void display() const {
+        cout << "[Account] " << accountNumber << " | Balance: $" << balance
+             << " | Status: " << status << "\n";
+    }
+
+    void displayTransactionLog() const {
+        cout << "  Transaction Log:\n";
+        for (const auto& log : transactionLog) {
+            cout << "    - " << log << "\n";
+        }
+    }
+};
+
+// ─────────────────────────────────────────────
+// 3. Caretaker - Manages Mementos
+// ─────────────────────────────────────────────
+class TransactionManager {
+private:
+    vector<shared_ptr<TransactionMemento>> checkpoints;
+    int currentCheckpoint;
+
+public:
+    TransactionManager()
+        : currentCheckpoint(-1) {}
+
+    void createCheckpoint(const shared_ptr<TransactionMemento>& memento) {
+        // Remove redo history if new checkpoint created
+        if (currentCheckpoint < (int)checkpoints.size() - 1) {
+            checkpoints.erase(
+                checkpoints.begin() + currentCheckpoint + 1,
+                checkpoints.end()
+            );
+        }
+        checkpoints.push_back(memento);
+        currentCheckpoint++;
+
+        cout << "[MANAGER] Checkpoint " << currentCheckpoint << " saved\n";
+        cout << "  Total checkpoints: " << checkpoints.size() << "\n";
+    }
+
+    bool rollback(BankAccount& account) {
+        if (currentCheckpoint <= 0) {
+            cout << "[ERROR] Cannot rollback - at first checkpoint\n";
+            return false;
+        }
+
+        currentCheckpoint--;
+        cout << "[MANAGER] Rolling back to checkpoint " << currentCheckpoint << "\n";
+        account.restoreFromMemento(checkpoints[currentCheckpoint]);
+        return true;
+    }
+
+    bool undo(BankAccount& account) {
+        return rollback(account);
+    }
+
+    bool redo(BankAccount& account) {
+        if (currentCheckpoint >= (int)checkpoints.size() - 1) {
+            cout << "[ERROR] Cannot redo - at last checkpoint\n";
+            return false;
+        }
+
+        currentCheckpoint++;
+        cout << "[MANAGER] Redoing to checkpoint " << currentCheckpoint << "\n";
+        account.restoreFromMemento(checkpoints[currentCheckpoint]);
+        return true;
+    }
+
+    void commit() {
+        cout << "[MANAGER] Transaction committed successfully\n";
+        cout << "  Final checkpoint: " << currentCheckpoint << "\n";
+        cout << "  Total checkpoints in history: " << checkpoints.size() << "\n";
+    }
+
+    void displayCheckpointHistory() const {
+        cout << "\n[HISTORY] Checkpoint History:\n";
+        for (size_t i = 0; i < checkpoints.size(); i++) {
+            cout << "Checkpoint " << i << ":\n";
+            checkpoints[i]->display();
+            if (i == (size_t)currentCheckpoint) {
+                cout << "  ← Current\n";
+            }
+        }
+        cout << "\n";
+    }
+};
+
+// ─────────────────────────────────────────────
+// 4. Client Code
+// ─────────────────────────────────────────────
+int main() {
+    cout << "================== MEMENTO PATTERN ==================\n";
+    cout << "    Database Transaction Management\n\n";
+
+    // Initialize
+    BankAccount account("ACC-001", 1000);
+    TransactionManager manager;
+
+    // Create initial checkpoint
+    account.display();
+    manager.createCheckpoint(account.saveToMemento());
+    cout << "\n";
+
+    // Operation 1: Withdraw
+    cout << "--- Operation 1: Withdraw $100 ---\n";
+    account.withdraw(100);
+    account.display();
+    manager.createCheckpoint(account.saveToMemento());
+    cout << "\n";
+
+    // Operation 2: Deposit
+    cout << "--- Operation 2: Deposit $300 ---\n";
+    account.deposit(300);
+    account.display();
+    manager.createCheckpoint(account.saveToMemento());
+    cout << "\n";
+
+    // Operation 3: Failed Transfer
+    cout << "--- Operation 3: Transfer $50 (This will FAIL) ---\n";
+    bool result = account.transfer(50, "ACC-002");
+    account.display();
+
+    if (!result) {
+        cout << "\n--- ROLLBACK: Reversing failed operation ---\n";
+        manager.rollback(account);
+        account.display();
+    }
+    cout << "\n";
+
+    // Successful Transfer
+    cout << "--- Operation 4: Transfer $50 (Successful) ---\n";
+    account.transfer(50, "ACC-002");
+    account.display();
+    manager.createCheckpoint(account.saveToMemento());
+    cout << "\n";
+
+    // Display history
+    manager.displayCheckpointHistory();
+
+    // Test Undo
+    cout << "--- Testing UNDO ---\n";
+    manager.undo(account);
+    account.display();
+    cout << "\n";
+
+    // Test Redo
+    cout << "--- Testing REDO ---\n";
+    manager.redo(account);
+    account.display();
+    cout << "\n";
+
+    // Display final transaction log
+    cout << "--- Final Transaction Log ---\n";
+    account.displayTransactionLog();
+    cout << "\n";
+
+    // Commit
+    manager.commit();
+
+    return 0;
+}
+
+
+OUTPUT EXAMPLE
+================================================================================
+
+================== MEMENTO PATTERN ==================
+    Database Transaction Management
+
+[Account] ACC-001 | Balance: $1000 | Status: OK
+[SAVE] Creating checkpoint for account ACC-001
+[MANAGER] Checkpoint 0 saved
+  Total checkpoints: 1
+
+--- Operation 1: Withdraw $100 ---
+Withdrawn: $100 | New balance: $900
+[Account] ACC-001 | Balance: $900 | Status: OK
+[SAVE] Creating checkpoint for account ACC-001
+[MANAGER] Checkpoint 1 saved
+  Total checkpoints: 2
+
+--- Operation 2: Deposit $300 ---
+Deposited: $300 | New balance: $1200
+[Account] ACC-001 | Balance: $1200 | Status: OK
+[SAVE] Creating checkpoint for account ACC-001
+[MANAGER] Checkpoint 2 saved
+  Total checkpoints: 3
+
+--- Operation 3: Transfer $50 (This will FAIL) ---
+ERROR: Cannot transfer $50
+[Account] ACC-001 | Balance: $1200 | Status: ERROR
+[MANAGER] Rolling back to checkpoint 2
+[RESTORE] Restoring account ACC-001 from checkpoint
+  Restored to balance: $1200
+[Account] ACC-001 | Balance: $1200 | Status: OK
+
+--- Operation 4: Transfer $50 (Successful) ---
+Transferred: $50 to ACC-002 | New balance: $1150
+[Account] ACC-001 | Balance: $1150 | Status: OK
+[SAVE] Creating checkpoint for account ACC-001
+[MANAGER] Checkpoint 3 saved
+  Total checkpoints: 4
+
+[HISTORY] Checkpoint History:
+Checkpoint 0:
+  [Memento] Account: ACC-001 | Balance: $1000 | Status: OK | Time: 2024-04-08 14:30:00
+Checkpoint 1:
+  [Memento] Account: ACC-001 | Balance: $900 | Status: OK | Time: 2024-04-08 14:30:00
+Checkpoint 2:
+  [Memento] Account: ACC-001 | Balance: $1200 | Status: OK | Time: 2024-04-08 14:30:00
+  ← Current
+Checkpoint 3:
+  [Memento] Account: ACC-001 | Balance: $1150 | Status: OK | Time: 2024-04-08 14:30:00
+
+--- Testing UNDO ---
+[MANAGER] Rolling back to checkpoint 2
+[RESTORE] Restoring account ACC-001 from checkpoint
+  Restored to balance: $1200
+[Account] ACC-001 | Balance: $1200 | Status: OK
+
+--- Testing REDO ---
+[MANAGER] Redoing to checkpoint 3
+[RESTORE] Restoring account ACC-001 from checkpoint
+  Restored to balance: $1150
+[Account] ACC-001 | Balance: $1150 | Status: OK
+
+--- Final Transaction Log ---
+  Transaction Log:
+    - Account created with balance: $1000.000000
+    - Withdrawal: -$100.000000
+    - Deposit: +$300.000000
+    - Transfer to ACC-002: -$50.000000
+
+[MANAGER] Transaction committed successfully
+  Final checkpoint: 3
+  Total checkpoints in history: 4
+
+
+STATE SNAPSHOT CONCEPT
+================================================================================
+
+Time T0:  Account created
+          balance = 1000
+          ↓ saveToMemento()
+          Memento #0: {balance: 1000, log: [...]}
+
+Time T1:  Withdraw 100
+          balance = 900
+          ↓ saveToMemento()
+          Memento #1: {balance: 900, log: [...]}
+
+Time T2:  Deposit 300
+          balance = 1200
+          ↓ saveToMemento()
+          Memento #2: {balance: 1200, log: [...]}
+
+Time T3:  Transfer fails
+          (Error state reached)
+          ↓ rollback to Memento #2
+          balance = 1200 (restored)
+
+Time T4:  Transfer succeeds
+          balance = 1150
+          ↓ saveToMemento()
+          Memento #3: {balance: 1150, log: [...]}
+
+Ready for:
+- UNDO: Go back to previous Memento
+- REDO: Go forward to next Memento
+- ROLLBACK: Restore specific Memento on error
+
+
+TRANSACTION SEMANTICS WITH MEMENTO
+================================================================================
+
+BEGIN TRANSACTION:
+  1. Current state → Memento #N (checkpoint)
+  2. Connect to TransactionManager
+
+OPERATIONS:
+  Withdraw: state changes → Memento created
+  Deposit: state changes → Memento created
+  Transfer: state changes → Memento created (if success)
+           OR state reverted if failure
+
+ON SUCCESS (COMMIT):
+  1. Final Memento saved
+  2. Remove intermediate checkpoints (if desired)
+  3. Lock finalized state
+
+ON FAILURE (ROLLBACK):
+  1. Restore last successful Memento
+  2. Discard failed operation state
+  3. Return to consistent state
+
+PROPERTIES MAINTAINED:
+- ATOMICITY:     Either all operations succeed or all discard
+- CONSISTENCY:   Always restore to valid state
+- ISOLATION:     Each transaction independent (separate Memento stacks)
+- DURABILITY:    Mementos persist (can be saved to disk)
+
+
+KEY TAKEAWAYS
+================================================================================
+
+1. Memento saves state without exposing internals
+2. Originator creates and restores from Mementos
+3. Memento is immutable snapshot of state
+4. Caretaker manages collection of Mementos
+5. Enables undo/redo functionality
+6. Supports transaction rollback
+7. Preserves encapsulation (no public state)
+8. Memory overhead = complete state copy per Memento
+9. Better for infrequent state saves
+10. Works well with transaction systems
+11. State history provides audit trail
+12. Can implement selective state saving optimization
+13. Thread-safe Memento (immutable)
+14. Requires careful serialization handling
+
+================================================================================
